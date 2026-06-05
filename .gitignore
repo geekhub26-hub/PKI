@@ -3,6 +3,17 @@
 /frontend-web/dist/
 /frontend-web/target/
 
+# ... (tes anciennes règles) ...
+
+## Flutter / frontend-mobile
+/frontend-mobile/.dart_tool/
+/frontend-mobile/.flutter-plugins
+/frontend-mobile/.flutter-plugins-dependencies
+/frontend-mobile/.packages
+/frontend-mobile/build/
+/frontend-mobile/generated/
+
+
 ## Java / backend
 /backend/target/
 
@@ -33,5 +44,3 @@
 /target/
 
 
-frontend_web/
-frontend_mobile/
