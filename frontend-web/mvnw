@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+# Maven wrapper alternative using Docker
+# Executes Maven in a Docker container (requires Docker installed)
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+docker run --rm -v "$SCRIPT_DIR":/workspace -w /workspace maven:3.9.6-eclipse-temurin-21 mvn "$@"

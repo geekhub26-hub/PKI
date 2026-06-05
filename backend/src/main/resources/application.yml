@@ -1,0 +1,133 @@
+﻿server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: pki-souverain-backend
+  main:
+    lazy-initialization: ${SPRING_MAIN_LAZY_INITIALIZATION:true}
+
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 200MB
+
+  # Base de donnÃƒÂ©es PostgreSQL
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 20000
+
+  # JPA / Hibernate
+  jpa:
+    hibernate:
+      ddl-auto: validate  # Ne jamais utiliser 'create' ou 'update' en production
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          time_zone: UTC
+
+  # Email (configuration SMTP pour tokens de validation)
+  mail:
+    host: ${SMTP_HOST}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
+    default-encoding: UTF-8
+
+# Configuration PKI
+pki:
+  # Frontend URL for email links
+  frontend:
+    url: ${FRONTEND_URL:http://localhost:5173}
+  
+  # Email
+  email:
+    debug-mode: ${PKI_EMAIL_DEBUG_MODE:false}  # En dev, afficher les emails dans les logs
+  
+  # OpenSSL
+  openssl:
+    binary: /usr/bin/openssl
+  
+  # Chemins de stockage
+  ca:
+    root-path: /opt/pki/ca
+    certs-path: /opt/pki/certs
+    crl-path: /opt/pki/crl
+  
+  # JWT
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration: 900000           # 15 minutes (en ms)
+    refresh-expiration: 604800000 # 7 jours (en ms)
+  
+  # Configuration AC par dÃƒÂ©faut
+  ca-defaults:
+    name: "AutoritÃƒÂ© de Certification Souveraine"
+    validity-years: 10
+    key-size: 4096
+    algorithm: RSA
+  # Validation IA des pieces d'identite
+  identity-ai:
+    provider: ${PKI_ID_AI_PROVIDER:heuristic}      # heuristic | google | local
+    strict-mode: ${PKI_ID_AI_STRICT_MODE:false}    # false: n bloque pas en cas de doute
+    google:
+      api-key: ${PKI_ID_AI_GOOGLE_API_KEY:}
+    local:
+      url: ${PKI_ID_AI_LOCAL_URL:http://localhost:8000/validate}
+      api-key: ${PKI_ID_AI_LOCAL_API_KEY:}
+      retries: ${PKI_ID_AI_LOCAL_RETRIES:3}
+      retry-delay-ms: ${PKI_ID_AI_LOCAL_RETRY_DELAY_MS:1500}
+      warmup-enabled: ${PKI_ID_AI_LOCAL_WARMUP_ENABLED:true}
+
+# Actuator (Monitoring)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# Logging
+logging:
+  level:
+    cm.gov.pki: INFO
+    org.springframework.security: INFO
+    org.hibernate.SQL: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+  file:
+    name: logs/pki-souverain.log
+    max-size: 10MB
+    max-history: 30
+
+# Swagger / OpenAPI
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
+
