@@ -199,19 +199,10 @@ CREATE TRIGGER update_certificates_updated_at BEFORE UPDATE ON certificates
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
--- DONNÉES INITIALES : Utilisateur Admin par défaut
+-- DONNÉES INITIALES
 -- ============================================================================
--- Mot de passe: Admin@2025! (à changer en production)
-INSERT INTO users (email, password_hash, first_name, last_name, role, is_active, email_verified)
-VALUES (
-    'admin@pki.local',
-    crypt('Admin@2025!', gen_salt('bf', 12)),
-    'Administrateur',
-    'Système',
-    'ADMIN',
-    true,
-    true
-);
+-- Aucun compte administrateur n'est créé avec un mot de passe codé en dur.
+-- Le bootstrap admin est géré par l'application via variables d'environnement.
 
 -- ============================================================================
 -- VUES UTILES

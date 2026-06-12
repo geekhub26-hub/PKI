@@ -40,7 +40,7 @@ spring:
 
   # Email (configuration SMTP pour tokens de validation)
   mail:
-    host: ${SMTP_HOST}
+    host: ${SMTP_HOST:}
     port: ${SMTP_PORT:587}
     username: ${SMTP_USERNAME:}
     password: ${SMTP_PASSWORD:}
@@ -64,6 +64,14 @@ pki:
   # Email
   email:
     debug-mode: ${PKI_EMAIL_DEBUG_MODE:false}  # En dev, afficher les emails dans les logs
+
+  # Bootstrap du premier administrateur (laisser vide pour desactiver)
+  bootstrap:
+    admin:
+      email: ${PKI_BOOTSTRAP_ADMIN_EMAIL:}
+      password: ${PKI_BOOTSTRAP_ADMIN_PASSWORD:}
+      first-name: ${PKI_BOOTSTRAP_ADMIN_FIRST_NAME:Administrateur}
+      last-name: ${PKI_BOOTSTRAP_ADMIN_LAST_NAME:Systeme}
   
   # OpenSSL
   openssl:

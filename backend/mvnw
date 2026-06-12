@@ -1,7 +1,16 @@
 #!/usr/bin/env sh
-# Maven wrapper alternative using Docker
-# Executes Maven in a Docker container (requires Docker installed)
+set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+EMBEDDED_MVN="$SCRIPT_DIR/.maven/bin/mvn"
 
-docker run --rm -v "$SCRIPT_DIR":/workspace -w /workspace maven:3.9.6-eclipse-temurin-21 mvn "$@"
+if [ -x "$EMBEDDED_MVN" ]; then
+  exec "$EMBEDDED_MVN" "$@"
+fi
+
+if command -v mvn >/dev/null 2>&1; then
+  exec mvn "$@"
+fi
+
+echo "Maven is not available. Install Maven or restore backend/.maven." >&2
+exit 127

@@ -29,23 +29,7 @@ public class CRLRotationScheduler {
             CAConfiguration ca = caConfigurationRepository.findFirstByIsActiveTrueOrderByCreatedAtDesc()
                     .orElse(null);
             if (ca == null) return;
-            String crlPem = caService.generateCRL(ca);
-            Path crlPath = Path.of(caService.caStore, ca.caName.replaceAll("\\s+","_").toLowerCase() + ".crl.pem");
-            Files.writeString(crlPath, crlPem);
-
-            CAConfiguration updated = new CAConfiguration();
-            updated.caName = ca.caName;
-            updated.caCertPath = ca.caCertPath;
-            updated.caKeyPath = ca.caKeyPath;
-            updated.caCrlPath = crlPath.toAbsolutePath().toString();
-            updated.validFrom = ca.validFrom;
-            updated.validUntil = ca.validUntil;
-            updated.keyAlgorithm = ca.keyAlgorithm;
-            updated.keySize = ca.keySize;
-            updated.signatureAlgorithm = ca.signatureAlgorithm;
-            updated.isActive = ca.isActive;
-            // autres champs si besoin
-            caConfigurationRepository.save(updated);
+            Path crlPath = caService.writeAndPersistCRL(ca);
             log.info("Rotated CRL for CA {} -> {}", ca.caName, crlPath);
         } catch (Exception e) {
             log.error("Failed to rotate CRL", e);

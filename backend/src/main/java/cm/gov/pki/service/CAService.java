@@ -67,7 +67,7 @@ public class CAService {
     private final UserRepository userRepository;
     private final KeystorePasswordService keystorePasswordService;
     
-    @Value("${pki.ca.store:ca-store}")
+    @Value("${pki.ca.root-path:ca-store}")
     public String caStore;
     public CAService(CAConfigurationRepository caConfigurationRepository,
                      CertificateRepository certificateRepository,
@@ -619,23 +619,23 @@ public class CAService {
         // Regenerate CRL and persist
         CAConfiguration ca = caConfigurationRepository.findFirstByIsActiveTrueOrderByCreatedAtDesc()
             .orElseThrow(() -> new RuntimeException("No active CA"));
-        String crlPem = generateCRL(ca);
         try {
-            java.nio.file.Path crlPath = java.nio.file.Path.of(caStore, ca.caName.replaceAll("\\s+","_").toLowerCase() + ".crl.pem");
-            java.nio.file.Files.writeString(crlPath, crlPem);
+            writeAndPersistCRL(ca);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to persist CRL: " + e.getMessage(), e);
+        }
+    }
 
-            CAConfiguration updated = new CAConfiguration();
-            updated.caName = ca.caName;
-            updated.caCertPath = ca.caCertPath;
-            updated.caKeyPath = ca.caKeyPath;
-            updated.caCrlPath = crlPath.toAbsolutePath().toString();
-            updated.validFrom = ca.validFrom;
-            updated.validUntil = ca.validUntil;
-            updated.keyAlgorithm = ca.keyAlgorithm;
-            updated.keySize = ca.keySize;
-            updated.signatureAlgorithm = ca.signatureAlgorithm;
-            updated.isActive = ca.isActive;
-            caConfigurationRepository.save(updated);
+    @Transactional
+    public Path writeAndPersistCRL(CAConfiguration ca) {
+        try {
+            String crlPem = generateCRL(ca);
+            Files.createDirectories(Path.of(caStore));
+            Path crlPath = Path.of(caStore, ca.caName.replaceAll("\\s+","_").toLowerCase() + ".crl.pem");
+            Files.writeString(crlPath, crlPem);
+            ca.caCrlPath = crlPath.toAbsolutePath().toString();
+            caConfigurationRepository.save(ca);
+            return crlPath;
         } catch (Exception e) {
             throw new RuntimeException("Failed to persist CRL: " + e.getMessage(), e);
         }

@@ -20,7 +20,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping({"/admin", "/api/admin"})
+@RequestMapping("/admin")
 public class AdminController {
 
 	private static final Logger log = LoggerFactory.getLogger(AdminController.class);
@@ -190,9 +190,11 @@ public class AdminController {
 		CAConfiguration ca = caConfigurationRepository.findFirstByIsActiveTrueOrderByCreatedAtDesc()
 				.orElseThrow(() -> new RuntimeException("No active CA found"));
 		String crlPem = caService.generateCRL(ca);
+		java.nio.file.Path crlPath = caService.writeAndPersistCRL(ca);
 		auditService.logSystem(cm.gov.pki.entity.AuditLog.Actions.CRL_PUBLISHED, "CAConfiguration", ca.id, java.util.Map.of("type", "generate"));
 		Map<String, String> resp = new HashMap<>();
 		resp.put("crl", crlPem);
+		resp.put("crlPath", crlPath.toAbsolutePath().toString());
 		return ResponseEntity.ok(resp);
 	}
 
@@ -234,13 +236,7 @@ public class AdminController {
 	public ResponseEntity<Map<String, String>> rotateCrl() {
 		CAConfiguration ca = caConfigurationRepository.findFirstByIsActiveTrueOrderByCreatedAtDesc()
 			.orElseThrow(() -> new RuntimeException("No active CA found"));
-		String crlPem = caService.generateCRL(ca);
-		java.nio.file.Path crlPath = java.nio.file.Path.of(caService.caStore, ca.caName.replaceAll("\\s+","_").toLowerCase() + ".crl.pem");
-		try {
-			java.nio.file.Files.writeString(crlPath, crlPem);
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
+		java.nio.file.Path crlPath = caService.writeAndPersistCRL(ca);
 		auditService.logSystem(cm.gov.pki.entity.AuditLog.Actions.CRL_PUBLISHED, "CAConfiguration", ca.id, java.util.Map.of("type", "rotate"));
 		Map<String, String> resp = new HashMap<>();
 		resp.put("crlPath", crlPath.toAbsolutePath().toString());

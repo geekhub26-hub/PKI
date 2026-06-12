@@ -16,6 +16,7 @@
 
 ## Java / backend
 /backend/target/
+/backend/.m2/
 
 # PKI materials / uploads
 /backend/ca-store/

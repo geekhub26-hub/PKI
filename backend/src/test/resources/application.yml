@@ -1,0 +1,29 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:pki_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: false
+  mail:
+    host:
+
+pki:
+  jwt:
+    secret: test-secret-key-that-is-long-enough-for-hmac-signing-tests
+    expiration: 900000
+    refresh-expiration: 604800000
+  ca:
+    root-path: target/test-ca-store
+    certs-path: target/test-ca-store/certs
+    crl-path: target/test-ca-store/crl
+  identity-ai:
+    local:
+      warmup-enabled: false

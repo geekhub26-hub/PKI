@@ -1,7 +1,9 @@
 package cm.gov.pki.controller;
 
 import cm.gov.pki.entity.Certificate;
+import cm.gov.pki.entity.User;
 import cm.gov.pki.repository.CertificateRepository;
+import cm.gov.pki.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -25,9 +27,37 @@ public class AdminIntegrationTest {
     @Autowired
     private CertificateRepository certificateRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
+    @Test
+    @WithMockUser(roles = "USER")
+    void adminEndpointsRejectRegularUsers() throws Exception {
+        mvc.perform(get("/admin/stats")).andExpect(status().isForbidden());
+    }
+
     @Test
     @WithMockUser(roles = "ADMIN")
     void endToEnd_pkiFlow_revokeAndCrl() throws Exception {
+        User admin = userRepository.save(User.builder()
+                .email("admin-test@pki.local")
+                .passwordHash("test-password-hash")
+                .firstName("Admin")
+                .lastName("Test")
+                .role(User.UserRole.ADMIN)
+                .isActive(true)
+                .emailVerified(true)
+                .build());
+        User certUser = userRepository.save(User.builder()
+                .email("user-test@pki.local")
+                .passwordHash("test-password-hash")
+                .firstName("User")
+                .lastName("Test")
+                .role(User.UserRole.USER)
+                .isActive(true)
+                .emailVerified(true)
+                .build());
+
         // Generate root CA
         mvc.perform(post("/admin/generate-ca?name=TestRoot")).andExpect(status().isOk());
 
@@ -44,6 +74,7 @@ public class AdminIntegrationTest {
 
         // Sign CSR
         String signResp = mvc.perform(post("/admin/sign-csr")
+                        .queryParam("userId", certUser.getId().toString())
                         .contentType(MediaType.TEXT_PLAIN)
                         .content(csrPem))
                 .andExpect(status().isOk())
@@ -63,7 +94,9 @@ public class AdminIntegrationTest {
         java.util.UUID certId = (java.util.UUID) idField.get(issued);
 
         // Revoke the certificate
-        mvc.perform(post("/admin/revoke/" + certId)).andExpect(status().isOk());
+        mvc.perform(post("/admin/revoke/" + certId)
+                        .queryParam("adminId", admin.getId().toString()))
+                .andExpect(status().isOk());
 
         // Reload and check status
         Certificate revoked = certificateRepository.findById(certId).orElseThrow();
