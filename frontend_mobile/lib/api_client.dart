@@ -164,8 +164,20 @@ class ApiClient {
     required String format,
     String? password,
   }) async {
+    if (format.toLowerCase() == 'p12' || format.toLowerCase() == 'pfx') {
+      final res = await _safePost(
+        _uri('/user/certificates/$certId/download-p12'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'password': password ?? ''}),
+      );
+      if (res.statusCode >= 400) throw ApiException(_extractError(utf8.decode(res.bodyBytes)));
+      return res.bodyBytes;
+    }
+
     final query = <String, String>{'format': format};
-    if (password != null && password.isNotEmpty) query['password'] = password;
     final res = await _safeGet(
       _uri('/user/certificates/$certId/download', query),
       headers: {'Authorization': 'Bearer $token'},
