@@ -119,18 +119,15 @@ public class CAService {
 
             // Paths
             String baseName = caName.replaceAll("\\s+", "_").toLowerCase();
-            Path keyPath = Path.of(caStore, baseName + ".key.pem");
+            Path keyPath = Path.of(caStore, baseName + ".p12");
             Path certPath = Path.of(caStore, baseName + ".crt.pem");
-
-            // Write private key (PKCS8 PEM)
-            try (JcaPEMWriter pw = new JcaPEMWriter(new FileWriter(keyPath.toFile()))) {
-                pw.writeObject(kp.getPrivate());
-            }
 
             // Write certificate PEM
             try (JcaPEMWriter pw = new JcaPEMWriter(new FileWriter(certPath.toFile()))) {
                 pw.writeObject(cert);
             }
+
+            writeCaKeystore(keyPath, kp.getPrivate(), cert);
 
             // Persist CAConfiguration
                 CAConfiguration cfg = new CAConfiguration();
@@ -146,7 +143,7 @@ public class CAService {
 
             CAConfiguration saved = caConfigurationRepository.save(cfg);
 
-            log.info("Generated root CA: {} (cert={}, key={})", caName, certPath, keyPath);
+            log.info("Generated root CA: {} (cert={}, keystore={})", caName, certPath, keyPath);
             return saved;
 
         } catch (Exception e) {
@@ -295,19 +292,17 @@ public class CAService {
             if (!Files.exists(certPath)) {
                 throw new RuntimeException("AC non configuree: certificat introuvable");
             }
-            // Load key and cert
-            Object keyObj;
-            try (PEMParser p = new PEMParser(Files.newBufferedReader(keyPath))) {
-                keyObj = p.readObject();
-            }
-            PrivateKey caPrivateKey = new JcaPEMKeyConverter().setProvider(BouncyCastleProvider.PROVIDER_NAME)
-                    .getPrivateKey(((org.bouncycastle.openssl.PEMKeyPair) keyObj).getPrivateKeyInfo());
-
             X509Certificate caCert;
             try (PEMParser p = new PEMParser(Files.newBufferedReader(certPath))) {
                 X509CertificateHolder holder = (X509CertificateHolder) p.readObject();
                 caCert = new JcaX509CertificateConverter().setProvider(BouncyCastleProvider.PROVIDER_NAME).getCertificate(holder);
             }
+
+            if (Files.exists(keyPath) && keyPath.toString().toLowerCase().endsWith(".p12")) {
+                return keyPath;
+            }
+
+            PrivateKey caPrivateKey = readPrivateKeyFromPem(keyPath);
 
             java.security.KeyStore ks = java.security.KeyStore.getInstance("PKCS12");
             ks.load(null, null);
@@ -317,6 +312,8 @@ public class CAService {
             try (java.io.FileOutputStream fos = new java.io.FileOutputStream(ksPath.toFile())) {
                 ks.store(fos, password.toCharArray());
             }
+            ca.caKeyPath = ksPath.toAbsolutePath().toString();
+            caConfigurationRepository.save(ca);
 
             // Secure: delete plaintext PEM private key after keystore creation
             try {
@@ -331,6 +328,43 @@ public class CAService {
             log.error("Failed to create keystore", e);
             throw new RuntimeException(e);
         }
+    }
+
+    private void writeCaKeystore(Path keystorePath, PrivateKey privateKey, X509Certificate certificate) throws Exception {
+        KeyStore ks = KeyStore.getInstance("PKCS12");
+        ks.load(null, null);
+        char[] password = keystorePasswordService.getPassword(null);
+        ks.setKeyEntry("ca-key", privateKey, password, new java.security.cert.Certificate[]{certificate});
+        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(keystorePath.toFile())) {
+            ks.store(fos, password);
+        }
+    }
+
+    private PrivateKey readPrivateKeyFromPem(Path keyPath) throws Exception {
+        try (PEMParser p = new PEMParser(Files.newBufferedReader(keyPath))) {
+            Object keyObj = p.readObject();
+            JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider(BouncyCastleProvider.PROVIDER_NAME);
+            if (keyObj instanceof org.bouncycastle.openssl.PEMKeyPair keyPair) {
+                return converter.getPrivateKey(keyPair.getPrivateKeyInfo());
+            }
+            if (keyObj instanceof org.bouncycastle.asn1.pkcs.PrivateKeyInfo privateKeyInfo) {
+                return converter.getPrivateKey(privateKeyInfo);
+            }
+            throw new RuntimeException("Cle privee PEM invalide");
+        }
+    }
+
+    private PrivateKey loadPrivateKeyFromKeystore(Path ksPath, CAConfiguration ca) throws Exception {
+        KeyStore ks = KeyStore.getInstance("PKCS12");
+        char[] password = keystorePasswordService.getPassword(ca);
+        try (java.io.InputStream is = Files.newInputStream(ksPath)) {
+            ks.load(is, password);
+        }
+        Key key = ks.getKey("ca-key", password);
+        if (key instanceof PrivateKey privateKey) {
+            return privateKey;
+        }
+        throw new RuntimeException("Cle privee CA absente du keystore");
     }
 
     /**
@@ -492,10 +526,8 @@ public class CAService {
 
             // Charger la clÃ© privÃ©e de l'AC racine depuis le keystore ou directement (si PEM existe encore)
             Path rootCertPath = Path.of(rootCA.caCertPath);
-            Path rootKeyPath = Path.of(rootCA.caKeyPath);
-            
             X509Certificate rootCert;
-            PrivateKey rootPrivateKey = null;
+            PrivateKey rootPrivateKey;
 
             // Try to load root cert
             try (PEMParser p = new PEMParser(Files.newBufferedReader(rootCertPath))) {
@@ -503,18 +535,9 @@ public class CAService {
                 rootCert = new JcaX509CertificateConverter().setProvider(BouncyCastleProvider.PROVIDER_NAME).getCertificate(holder);
             }
 
-            // Try to load root private key (from PEM or keystore)
-            if (Files.exists(rootKeyPath)) {
-                try (PEMParser p = new PEMParser(Files.newBufferedReader(rootKeyPath))) {
-                    Object keyObj = p.readObject();
-                    rootPrivateKey = new JcaPEMKeyConverter().setProvider(BouncyCastleProvider.PROVIDER_NAME)
-                            .getPrivateKey(((org.bouncycastle.openssl.PEMKeyPair) keyObj).getPrivateKeyInfo());
-                }
-            } else {
-                rootPrivateKey = loadPrivateKeyForCA(rootCA);
-                if (rootPrivateKey == null) {
-                    throw new RuntimeException("AC root private key not available (PEM nor keystore). Cannot generate intermediate CA.");
-                }
+            rootPrivateKey = loadPrivateKeyForCA(rootCA);
+            if (rootPrivateKey == null) {
+                throw new RuntimeException("AC root private key not available (PEM nor keystore). Cannot generate intermediate CA.");
             }
 
             // GÃ©nÃ©rer paire de clÃ©s pour l'AC intermÃ©diaire
@@ -552,18 +575,16 @@ public class CAService {
                     .setProvider(BouncyCastleProvider.PROVIDER_NAME)
                     .getCertificate(certBuilder.build(signer));
 
-            // Sauvegarder les fichiers PEM intermÃ©diaires
+            // Sauvegarder le certificat PEM et protéger la clé dans un keystore PKCS12.
             String baseName = caName.replaceAll("\\s+", "_").toLowerCase();
             Path intermediateCertPath = Path.of(caStore, baseName + ".crt.pem");
-            Path intermediateKeyPath = Path.of(caStore, baseName + ".key.pem");
+            Path intermediateKeyPath = Path.of(caStore, baseName + ".p12");
 
             try (JcaPEMWriter pw = new JcaPEMWriter(new FileWriter(intermediateCertPath.toFile()))) {
                 pw.writeObject(intermediateCert);
             }
 
-            try (JcaPEMWriter pw = new JcaPEMWriter(new FileWriter(intermediateKeyPath.toFile()))) {
-                pw.writeObject(intermediateKeyPair.getPrivate());
-            }
+            writeCaKeystore(intermediateKeyPath, intermediateKeyPair.getPrivate(), intermediateCert);
 
                 // Persister la configuration via le builder (Ã©vite dÃ©pendre des setters Lombok)
                 CAConfiguration cfg = new CAConfiguration();
@@ -578,7 +599,7 @@ public class CAService {
                 cfg.isActive = false;
 
                 CAConfiguration saved = caConfigurationRepository.save(cfg);
-            log.info("Generated intermediate CA: {} (cert={}, key={})", caName, intermediateCertPath, intermediateKeyPath);
+            log.info("Generated intermediate CA: {} (cert={}, keystore={})", caName, intermediateCertPath, intermediateKeyPath);
             return saved;
 
         } catch (Exception e) {
@@ -651,28 +672,20 @@ public class CAService {
     // Charge la clÃ© privÃ©e pour une CA : tente le PEM puis le PKCS12 keystore (alias 'ca-key').
     private PrivateKey loadPrivateKeyForCA(CAConfiguration ca) {
         try {
-            // Try PEM first
             Path keyPath = Path.of(ca.caKeyPath);
             if (Files.exists(keyPath)) {
-                try (PEMParser p = new PEMParser(Files.newBufferedReader(keyPath))) {
-                    Object keyObj = p.readObject();
-                    return new JcaPEMKeyConverter().setProvider(BouncyCastleProvider.PROVIDER_NAME)
-                            .getPrivateKey(((org.bouncycastle.openssl.PEMKeyPair) keyObj).getPrivateKeyInfo());
+                String lower = keyPath.toString().toLowerCase();
+                if (lower.endsWith(".p12") || lower.endsWith(".pfx")) {
+                    return loadPrivateKeyFromKeystore(keyPath, ca);
                 }
+                return readPrivateKeyFromPem(keyPath);
             }
 
             // Fallback : look for PKCS12 in caStore with same base name
             String baseName = ca.caName.replaceAll("\\s+", "_").toLowerCase();
             Path ksPath = Path.of(caStore, baseName + ".p12");
             if (Files.exists(ksPath)) {
-                KeyStore ks = KeyStore.getInstance("PKCS12");
-                try (java.io.InputStream is = Files.newInputStream(ksPath)) {
-                    ks.load(is, keystorePasswordService.getPassword(ca));
-                }
-                Key key = ks.getKey("ca-key", keystorePasswordService.getPassword(ca));
-                if (key instanceof PrivateKey) {
-                    return (PrivateKey) key;
-                }
+                return loadPrivateKeyFromKeystore(ksPath, ca);
             }
 
         } catch (Exception e) {
@@ -687,23 +700,12 @@ public class CAService {
     public String generateCRL(CAConfiguration ca) {
         try {
             // Charger l'AC (certificat et clÃ© privÃ©e)
-            Path caKeyPath = Path.of(ca.caKeyPath);
             Path caCertPath = Path.of(ca.caCertPath);
 
             // Load CA private key (PEM or keystore)
-            PrivateKey caPrivateKey = null;
-            if (Files.exists(caKeyPath)) {
-                Object caKeyObj;
-                try (PEMParser p = new PEMParser(Files.newBufferedReader(caKeyPath))) {
-                    caKeyObj = p.readObject();
-                }
-                caPrivateKey = new JcaPEMKeyConverter().setProvider(BouncyCastleProvider.PROVIDER_NAME)
-                        .getPrivateKey(((org.bouncycastle.openssl.PEMKeyPair) caKeyObj).getPrivateKeyInfo());
-            } else {
-                caPrivateKey = loadPrivateKeyForCA(ca);
-                if (caPrivateKey == null) {
-                    throw new RuntimeException("CA private key not available. Use keystore for CRL generation.");
-                }
+            PrivateKey caPrivateKey = loadPrivateKeyForCA(ca);
+            if (caPrivateKey == null) {
+                throw new RuntimeException("CA private key not available. Use keystore for CRL generation.");
             }
 
             X509Certificate caCert;

@@ -24,6 +24,7 @@ pki:
     root-path: target/test-ca-store
     certs-path: target/test-ca-store/certs
     crl-path: target/test-ca-store/crl
+    default-keystore-password: test-keystore-password
   identity-ai:
     local:
       warmup-enabled: false

@@ -43,9 +43,13 @@ public class UserController {
             "application/pdf",
             "image/png",
             "image/jpeg",
-            "image/jpg",
-            "image/gif",
-            "text/plain"
+            "image/jpg"
+    );
+    private static final Map<String, String> ALLOWED_EXTENSIONS = Map.of(
+            "pdf", "application/pdf",
+            "png", "image/png",
+            "jpg", "image/jpeg",
+            "jpeg", "image/jpeg"
     );
 
     private Path uploadRoot() {
@@ -516,29 +520,56 @@ public class UserController {
             contentType = "application/x-x509-ca-cert";
             contentBytes = certificate.getCertificatePem().getBytes(StandardCharsets.UTF_8);
         } else if ("p12".equalsIgnoreCase(format) || "pfx".equalsIgnoreCase(format)) {
-            if (password == null || password.length() < 8) {
-                return ResponseEntity.status(400).body(Map.of("error", "Mot de passe .p12 requis (minimum 8 caracteres)."));
-            }
-            if (certificate.getPrivateKeyPem() == null || certificate.getPrivateKeyPem().isBlank()) {
-                return ResponseEntity.status(400).body(Map.of(
-                        "error",
-                        "Export .p12/.pfx indisponible pour ce certificat. Utilisez .crt ou .pem."
-                ));
-            }
-            fileName = "certificate-" + certificateId + ".p12";
-            contentType = "application/x-pkcs12";
-            contentBytes = caService.buildPkcs12(
-                    certificate.getCertificatePem(),
-                    certificate.getPrivateKeyPem(),
-                    password,
-                    "cert-" + certificate.getId()
-            );
+            return ResponseEntity.status(405).body(Map.of(
+                    "error",
+                    "L'export .p12/.pfx doit utiliser POST /user/certificates/{certificateId}/download-p12."
+            ));
         } else {
             return ResponseEntity.status(400).body(Map.of("error", "Format invalide. Utilisez pem, crt ou p12."));
         }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_TYPE, contentType)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+                .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(contentBytes.length))
+                .body(contentBytes);
+    }
+
+    @PostMapping("/certificates/{certificateId}/download-p12")
+    public ResponseEntity<?> downloadCertificateP12(
+            Authentication authentication,
+            @PathVariable("certificateId") UUID certificateId,
+            @RequestBody Map<String, String> body) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof User)) {
+            return ResponseEntity.status(401).build();
+        }
+        User user = (User) authentication.getPrincipal();
+        var certOpt = certificateRepository.findById(certificateId);
+        if (certOpt.isEmpty()) return ResponseEntity.status(404).body(Map.of("error", "Certificate not found"));
+        Certificate certificate = certOpt.get();
+        if (!certificate.getUser().getId().equals(user.getId())) {
+            return ResponseEntity.status(403).body(Map.of("error", "Unauthorized"));
+        }
+
+        String password = body == null ? null : body.get("password");
+        if (password == null || password.length() < 8) {
+            return ResponseEntity.status(400).body(Map.of("error", "Mot de passe .p12 requis (minimum 8 caracteres)."));
+        }
+        if (certificate.getPrivateKeyPem() == null || certificate.getPrivateKeyPem().isBlank()) {
+            return ResponseEntity.status(400).body(Map.of(
+                    "error",
+                    "Export .p12/.pfx indisponible pour ce certificat. Utilisez .crt ou .pem."
+            ));
+        }
+
+        byte[] contentBytes = caService.buildPkcs12(
+                certificate.getCertificatePem(),
+                certificate.getPrivateKeyPem(),
+                password,
+                "cert-" + certificate.getId()
+        );
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, "application/x-pkcs12")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"certificate-" + certificateId + ".p12\"")
                 .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(contentBytes.length))
                 .body(contentBytes);
     }
@@ -682,10 +713,16 @@ public class UserController {
             if (f == null || f.isEmpty()) continue;
             if (f.getSize() > MAX_FILE_SIZE) {
                 invalid.add(f.getOriginalFilename() == null ? "file" : f.getOriginalFilename());
+                continue;
+            }
+            try {
+                validateDocumentFile(f, expectedIdentityType);
+            } catch (IllegalArgumentException ex) {
+                invalid.add((f.getOriginalFilename() == null ? "file" : f.getOriginalFilename()) + ": " + ex.getMessage());
             }
         }
         if (!invalid.isEmpty()) {
-            throw new IllegalArgumentException("Fichiers trop volumineux (>100MB): " + String.join(",", invalid));
+            throw new IllegalArgumentException("Documents invalides: " + String.join("; ", invalid));
         }
 
         try {
@@ -709,6 +746,76 @@ public class UserController {
             log.error("Error saving documents for request {}", requestId, ex);
             throw new RuntimeException("Erreur technique lors de l'enregistrement des fichiers", ex);
         }
+    }
+
+    private void validateDocumentFile(MultipartFile file, String expectedIdentityType) {
+        String original = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
+        String ext = extensionOf(original);
+        String expectedMime = ALLOWED_EXTENSIONS.get(ext);
+        if (expectedMime == null) {
+            throw new IllegalArgumentException("extension non autorisee");
+        }
+
+        String declaredMime = normalizeMime(file.getContentType());
+        if (!ALLOWED_TYPES.contains(declaredMime) || !declaredMime.equals(expectedMime)) {
+            throw new IllegalArgumentException("type MIME non autorise");
+        }
+
+        String detectedMime = detectMimeBySignature(file);
+        if (!expectedMime.equals(detectedMime)) {
+            throw new IllegalArgumentException("signature fichier invalide");
+        }
+
+        IdentityDocumentAiService.ValidationResult aiResult =
+                identityDocumentAiService.validateIdentityDocument(file, expectedIdentityType);
+        if (!aiResult.accepted()) {
+            throw new IllegalArgumentException("validation IA refusee: " + aiResult.message());
+        }
+    }
+
+    private static String extensionOf(String filename) {
+        int dot = filename.lastIndexOf('.');
+        if (dot < 0 || dot == filename.length() - 1) return "";
+        return filename.substring(dot + 1).toLowerCase(Locale.ROOT);
+    }
+
+    private static String normalizeMime(String mime) {
+        if (mime == null) return "";
+        String value = mime.toLowerCase(Locale.ROOT).split(";", 2)[0].trim();
+        return "image/jpg".equals(value) ? "image/jpeg" : value;
+    }
+
+    private static String detectMimeBySignature(MultipartFile file) {
+        try (InputStream in = file.getInputStream()) {
+            byte[] header = in.readNBytes(16);
+            if (header.length >= 4
+                    && header[0] == 0x25
+                    && header[1] == 0x50
+                    && header[2] == 0x44
+                    && header[3] == 0x46) {
+                return "application/pdf";
+            }
+            if (header.length >= 8
+                    && (header[0] & 0xFF) == 0x89
+                    && header[1] == 0x50
+                    && header[2] == 0x4E
+                    && header[3] == 0x47
+                    && header[4] == 0x0D
+                    && header[5] == 0x0A
+                    && header[6] == 0x1A
+                    && header[7] == 0x0A) {
+                return "image/png";
+            }
+            if (header.length >= 3
+                    && (header[0] & 0xFF) == 0xFF
+                    && (header[1] & 0xFF) == 0xD8
+                    && (header[2] & 0xFF) == 0xFF) {
+                return "image/jpeg";
+            }
+        } catch (IOException ignored) {
+            return "";
+        }
+        return "";
     }
 
     public static class CertificateDTO {

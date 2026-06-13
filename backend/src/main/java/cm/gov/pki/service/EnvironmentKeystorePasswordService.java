@@ -7,10 +7,10 @@ import org.springframework.stereotype.Service;
 @Service
 public class EnvironmentKeystorePasswordService implements KeystorePasswordService {
 
-    @Value("${pki.ca.default-keystore-password:changeit}")
+    @Value("${pki.ca.default-keystore-password:}")
     private String defaultPassword;
 
-    @Value("${pki.ca.keystore-password-env:}")
+    @Value("${pki.ca.keystore-password-env:PKI_CA_KEYSTORE_PASSWORD}")
     private String keystorePasswordEnvVar;
 
     @Override
@@ -21,6 +21,11 @@ public class EnvironmentKeystorePasswordService implements KeystorePasswordServi
                 if (env != null && !env.isBlank()) return env.toCharArray();
             }
         } catch (Exception ignored) {}
-        return defaultPassword.toCharArray();
+        if (defaultPassword != null && !defaultPassword.isBlank()) {
+            return defaultPassword.toCharArray();
+        }
+        throw new IllegalStateException(
+                "CA keystore password is not configured. Set PKI_CA_KEYSTORE_PASSWORD before generating or using a CA keystore."
+        );
     }
 }

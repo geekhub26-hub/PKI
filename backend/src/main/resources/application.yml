@@ -82,6 +82,8 @@ pki:
     root-path: /opt/pki/ca
     certs-path: /opt/pki/certs
     crl-path: /opt/pki/crl
+    keystore-password-env: ${PKI_CA_KEYSTORE_PASSWORD_ENV:PKI_CA_KEYSTORE_PASSWORD}
+    default-keystore-password: ${PKI_CA_DEFAULT_KEYSTORE_PASSWORD:}
   
   # JWT
   jwt:
