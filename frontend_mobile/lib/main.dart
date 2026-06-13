@@ -600,7 +600,7 @@ class LandingDocsScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: const [
                 Text('- Token Bearer utilise pour toutes les routes privees.', style: body),
-                Text('- Token sauvegarde localement (SharedPreferences).', style: body),
+                Text('- Token sauvegarde dans le stockage securise de la plateforme.', style: body),
                 Text('- Les fichiers telecharges sont stockes dans ApplicationDocumentsDirectory.', style: body),
                 Text('- Le role ADMIN n est pas expose dans l app mobile.', style: body),
               ],
@@ -626,7 +626,7 @@ class LandingDocsScreen extends StatelessWidget {
               children: const [
                 Text('Si un endpoint ne repond pas, l app affiche des messages reseau adaptes (timeout, serveur indisponible, etc.).', style: body),
                 SizedBox(height: 8),
-                Text('Version API cible: https://pki-backend.onrender.com/api', style: TextStyle(color: Color(0xFF62D7FF), fontWeight: FontWeight.w700)),
+                Text('Version API cible: https://pki-1.onrender.com/api', style: TextStyle(color: Color(0xFF62D7FF), fontWeight: FontWeight.w700)),
               ],
             ),
           ),
@@ -1277,7 +1277,7 @@ class DashboardPage extends StatelessWidget {
               SizedBox(height: 10),
               Divider(color: Color(0xFF274282)),
               SizedBox(height: 10),
-              Text('API Endpoint: https://pki-backend.onrender.com/api', style: TextStyle(color: Color(0xFFAFC1E8))),
+              Text('API Endpoint: https://pki-1.onrender.com/api', style: TextStyle(color: Color(0xFFAFC1E8))),
             ],
           ),
         ),

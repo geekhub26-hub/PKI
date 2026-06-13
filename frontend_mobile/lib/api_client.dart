@@ -14,7 +14,7 @@ class ApiException implements Exception {
 }
 
 class ApiClient {
-  ApiClient({this.baseUrl = const String.fromEnvironment('API_URL', defaultValue: 'https://pki-backend.onrender.com/api')});
+  ApiClient({this.baseUrl = const String.fromEnvironment('API_URL', defaultValue: 'https://pki-1.onrender.com/api')});
 
   final String baseUrl;
 

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client.dart';
@@ -14,6 +15,7 @@ class AppState extends ChangeNotifier {
   static const _tokenKey = 'mobile_access_token';
   static const _seenNotifKey = 'mobile_seen_notifications';
   static const _dismissedNotifKey = 'mobile_dismissed_notifications';
+  static const _secureStorage = FlutterSecureStorage();
 
   String? _token;
   AppUser? user;
@@ -29,7 +31,13 @@ class AppState extends ChangeNotifier {
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString(_tokenKey);
+    _token = await _secureStorage.read(key: _tokenKey);
+    final legacyToken = prefs.getString(_tokenKey);
+    if (_token == null && legacyToken != null && legacyToken.isNotEmpty) {
+      _token = legacyToken;
+      await _secureStorage.write(key: _tokenKey, value: legacyToken);
+      await prefs.remove(_tokenKey);
+    }
     seenNotifications = (prefs.getStringList(_seenNotifKey) ?? []).toSet();
     dismissedNotifications = (prefs.getStringList(_dismissedNotifKey) ?? []).toSet();
     if (_token == null) {
@@ -68,8 +76,7 @@ class AppState extends ChangeNotifier {
       final accessToken = (res['accessToken'] ?? res['token'] ?? '').toString();
       if (accessToken.isEmpty) throw ApiException('Token absent');
       _token = accessToken;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_tokenKey, _token!);
+      await _secureStorage.write(key: _tokenKey, value: _token!);
       user = await api.getMe(_token!);
       // Do not block login if some optional endpoints (requests/certificates)
       // are temporarily failing on the server.
@@ -99,6 +106,7 @@ class AppState extends ChangeNotifier {
     seenNotifications = {};
     dismissedNotifications = {};
     final prefs = await SharedPreferences.getInstance();
+    await _secureStorage.delete(key: _tokenKey);
     await prefs.remove(_tokenKey);
     await prefs.remove(_seenNotifKey);
     await prefs.remove(_dismissedNotifKey);
