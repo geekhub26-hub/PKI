@@ -179,10 +179,12 @@ BEGIN
 END$$;
 
 -- ============================================================================
--- DONNÉES INITIALES
+-- DONNÉES INITIALES : Utilisateur Admin par défaut
 -- ============================================================================
--- Aucun compte administrateur n'est créé avec un mot de passe codé en dur.
--- Le bootstrap admin est géré par l'application via variables d'environnement.
+-- NOTE: Le mot de passe est généré avec la fonction crypt() de pgcrypto
+INSERT INTO users (email, password_hash, first_name, last_name, role, is_active, email_verified)
+SELECT 'admin@pki.local', crypt('Admin@2025!', gen_salt('bf', 12)), 'Administrateur', 'Système', 'ADMIN', true, true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'admin@pki.local');
 
 -- ============================================================================
 -- VUES UTILES
