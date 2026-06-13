@@ -7,7 +7,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'https://pki-backend.onrender.com',
+        target: 'https://pki-1.onrender.com',
       }
     },
     fs: { allow: ['..'] }

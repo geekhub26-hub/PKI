@@ -63,7 +63,7 @@ Le frontend utilise l'URL backend via variable Vite.
 Exemple:
 
 ```env
-VITE_API_BASE_URL=https://pki-backend.onrender.com/api
+VITE_API_BASE_URL=https://pki-1.onrender.com/api
 ```
 
 ## Deploiement Render (Static Site)
