@@ -382,7 +382,7 @@ public class AdminController {
 			return ResponseEntity.status(400).body(java.util.Map.of("error", "Request not in review state"));
 		}
 
-		req.setStatus("REVIEW_APPROVED");
+		req.setStatus(req.getCsrContent() == null || req.getCsrContent().isBlank() ? "REVIEW_APPROVED" : "CSR_SUBMITTED");
 		req.setReviewedAt(java.time.LocalDateTime.now());
 		req.setReviewedBy(admin);
 		req.setRejectionReason(null);

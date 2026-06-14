@@ -38,18 +38,21 @@ public class UserController {
 
     private static final Logger log = LoggerFactory.getLogger(UserController.class);
     private static final long MAX_FILE_SIZE = 100L * 1024L * 1024L; // 100MB
+    private static final long MAX_SELFIE_SIZE = 10L * 1024L * 1024L; // 10MB
     private static final long MAX_CSR_SIZE = 200L * 1024L; // 200KB
     private static final List<String> ALLOWED_TYPES = List.of(
             "application/pdf",
             "image/png",
             "image/jpeg",
-            "image/jpg"
+            "image/jpg",
+            "image/webp"
     );
     private static final Map<String, String> ALLOWED_EXTENSIONS = Map.of(
             "pdf", "application/pdf",
             "png", "image/png",
             "jpg", "image/jpeg",
-            "jpeg", "image/jpeg"
+            "jpeg", "image/jpeg",
+            "webp", "image/webp"
     );
 
     private Path uploadRoot() {
@@ -136,7 +139,10 @@ public class UserController {
             @RequestParam(name = "identityDocumentType", required = false) String identityDocumentType,
             @RequestParam(name = "identityDocumentNumber", required = false) String identityDocumentNumber,
             @RequestParam(name = "identityDocumentExpiry", required = false) String identityDocumentExpiry,
-            @RequestPart(name = "documents", required = false) MultipartFile[] documents
+            @RequestParam(name = "csr", required = false) String csr,
+            @RequestPart(name = "documents", required = false) MultipartFile[] documents,
+            @RequestPart(name = "selfie", required = false) MultipartFile selfie,
+            @RequestPart(name = "csrFile", required = false) MultipartFile csrFile
     ) {
         if (authentication == null || !(authentication.getPrincipal() instanceof User)) {
             return ResponseEntity.status(401).build();
@@ -160,7 +166,11 @@ public class UserController {
         req.setIdentityDocumentNumber((identityDocumentNumber == null || identityDocumentNumber.isBlank()) ? null : identityDocumentNumber.trim());
         req.setBirthDate(parseOptionalDate(birthDate));
         req.setIdentityDocumentExpiry(parseOptionalDate(identityDocumentExpiry));
-        req.setCsrContent(null);
+        try {
+            req.setCsrContent(readCsrInput(csr, csrFile));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(400).body(Map.of("error", ex.getMessage()));
+        }
 
         String validationError = validateBaseRequest(req);
         if (validationError != null) {
@@ -173,7 +183,10 @@ public class UserController {
 
         String savedDocs;
         try {
-            savedDocs = saveDocuments(req.getId(), documents, req.getIdentityDocumentType());
+            savedDocs = joinNonBlank(
+                    saveDocuments(req.getId(), documents, req.getIdentityDocumentType()),
+                    saveSelfie(req.getId(), selfie)
+            );
         } catch (IllegalArgumentException iae) {
             try {
                 certificateRequestRepository.delete(req);
@@ -306,16 +319,11 @@ public class UserController {
             return ResponseEntity.status(400).body(Map.of("error", "Admin verification not approved yet"));
         }
 
-        String csrContent = csr;
-        if ((csrContent == null || csrContent.isBlank()) && csrFile != null && !csrFile.isEmpty()) {
-            if (csrFile.getSize() > MAX_CSR_SIZE) {
-                return ResponseEntity.status(400).body(Map.of("error", "CSR trop volumineux (>200KB)"));
-            }
-            try (InputStream in = csrFile.getInputStream()) {
-                csrContent = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-            } catch (IOException ex) {
-                return ResponseEntity.status(400).body(Map.of("error", "Impossible de lire le fichier CSR"));
-            }
+        String csrContent;
+        try {
+            csrContent = readCsrInput(csr, csrFile);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(400).body(Map.of("error", ex.getMessage()));
         }
         if (csrContent == null || csrContent.isBlank()) {
             return ResponseEntity.status(400).body(Map.of("error", "Un CSR est requis (texte ou fichier)"));
@@ -706,6 +714,35 @@ public class UserController {
         }
     }
 
+    private String readCsrInput(String csr, MultipartFile csrFile) {
+        String csrContent = csr;
+        if (csrContent != null && csrContent.length() > MAX_CSR_SIZE) {
+            throw new IllegalArgumentException("CSR trop volumineux (>200KB)");
+        }
+        if ((csrContent == null || csrContent.isBlank()) && csrFile != null && !csrFile.isEmpty()) {
+            if (csrFile.getSize() > MAX_CSR_SIZE) {
+                throw new IllegalArgumentException("CSR trop volumineux (>200KB)");
+            }
+            try (InputStream in = csrFile.getInputStream()) {
+                csrContent = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            } catch (IOException ex) {
+                throw new IllegalArgumentException("Impossible de lire le fichier CSR");
+            }
+        }
+        return csrContent == null ? null : csrContent.trim();
+    }
+
+    private String joinNonBlank(String... values) {
+        List<String> result = new ArrayList<>();
+        for (String value : values) {
+            if (value == null || value.isBlank()) continue;
+            for (String part : value.split(",")) {
+                if (!part.isBlank()) result.add(part.trim());
+            }
+        }
+        return String.join(",", result);
+    }
+
     private String saveDocuments(UUID requestId, MultipartFile[] documents, String expectedIdentityType) {
         if (documents == null || documents.length == 0) return "";
         List<String> invalid = new ArrayList<>();
@@ -748,6 +785,28 @@ public class UserController {
         }
     }
 
+    private String saveSelfie(UUID requestId, MultipartFile selfie) {
+        if (selfie == null || selfie.isEmpty()) return "";
+        validateSelfieFile(selfie);
+
+        try {
+            Path base = uploadRoot().resolve(Paths.get("certificate_requests", requestId.toString()));
+            Files.createDirectories(base);
+            String original = selfie.getOriginalFilename();
+            String baseName = (original == null) ? "selfie" : Paths.get(original).getFileName().toString();
+            String safeBase = baseName.replaceAll("[^a-zA-Z0-9._-]", "_");
+            String safeName = "selfie_" + UUID.randomUUID() + "_" + safeBase;
+            Path target = base.resolve(safeName);
+            try (InputStream in = selfie.getInputStream()) {
+                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+            return safeName;
+        } catch (Exception ex) {
+            log.error("Error saving selfie for request {}", requestId, ex);
+            throw new RuntimeException("Erreur technique lors de l'enregistrement du selfie", ex);
+        }
+    }
+
     private void validateDocumentFile(MultipartFile file, String expectedIdentityType) {
         String original = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
         String ext = extensionOf(original);
@@ -770,6 +829,29 @@ public class UserController {
                 identityDocumentAiService.validateIdentityDocument(file, expectedIdentityType);
         if (!aiResult.accepted()) {
             throw new IllegalArgumentException("validation IA refusee: " + aiResult.message());
+        }
+    }
+
+    private void validateSelfieFile(MultipartFile file) {
+        if (file.getSize() > MAX_SELFIE_SIZE) {
+            throw new IllegalArgumentException("Selfie trop volumineux (>10MB)");
+        }
+
+        String original = file.getOriginalFilename() == null ? "selfie" : file.getOriginalFilename();
+        String ext = extensionOf(original);
+        String expectedMime = ALLOWED_EXTENSIONS.get(ext);
+        if (expectedMime == null || !expectedMime.startsWith("image/")) {
+            throw new IllegalArgumentException("Selfie: extension image non autorisee");
+        }
+
+        String declaredMime = normalizeMime(file.getContentType());
+        if (!declaredMime.startsWith("image/") || !declaredMime.equals(expectedMime)) {
+            throw new IllegalArgumentException("Selfie: type MIME non autorise");
+        }
+
+        String detectedMime = detectMimeBySignature(file);
+        if (!expectedMime.equals(detectedMime)) {
+            throw new IllegalArgumentException("Selfie: signature fichier invalide");
         }
     }
 
@@ -811,6 +893,17 @@ public class UserController {
                     && (header[1] & 0xFF) == 0xD8
                     && (header[2] & 0xFF) == 0xFF) {
                 return "image/jpeg";
+            }
+            if (header.length >= 12
+                    && header[0] == 0x52
+                    && header[1] == 0x49
+                    && header[2] == 0x46
+                    && header[3] == 0x46
+                    && header[8] == 0x57
+                    && header[9] == 0x45
+                    && header[10] == 0x42
+                    && header[11] == 0x50) {
+                return "image/webp";
             }
         } catch (IOException ignored) {
             return "";
