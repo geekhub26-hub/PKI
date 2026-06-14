@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import * as tmImage from '@teachablemachine/image';
 import { userService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { notify } from '../utils/notify';
 
 export default function UserGenerateCsrPage() {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [searchParams] = useSearchParams();
+  const requestId = searchParams.get('id');
+  const mode = searchParams.get('mode') || 'new';
+  const isCsrMode = mode === 'csr' && !!requestId;
+  const lastStep: 2 | 3 = isCsrMode ? 3 : 2;
+  const [step, setStep] = useState<1 | 2 | 3>(() => (isCsrMode ? 3 : 1));
   const [files, setFiles] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -37,6 +42,10 @@ export default function UserGenerateCsrPage() {
     setEmailAddr(user?.email || '');
     setCountry('CM');
   }, [user]);
+
+  useEffect(() => {
+    setStep(isCsrMode ? 3 : 1);
+  }, [isCsrMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,14 +105,10 @@ export default function UserGenerateCsrPage() {
   const onFiles = useCallback(
     async (selected: FileList | null) => {
       if (!selected) return;
-      if (aiStatus !== 'ready' || !aiModel) {
-        setError("Le modele IA est en cours de chargement. Reessayez dans quelques secondes.");
-        return;
-      }
       setError(null);
       const arr = Array.from(selected);
-      const allowed = arr.filter((f) => /png|jpe?g/.test(f.type));
-      const rejected = arr.filter((f) => !/png|jpe?g/.test(f.type)).map((f) => f.name);
+      const allowed = arr.filter((f) => /png|jpe?g|pdf/.test(f.type));
+      const rejected = arr.filter((f) => !/png|jpe?g|pdf/.test(f.type)).map((f) => f.name);
       if (rejected.length) {
         setError(`Format non pris en charge: ${rejected.join(', ')}`);
       }
@@ -114,6 +119,15 @@ export default function UserGenerateCsrPage() {
       const invalid: string[] = [];
 
       for (const file of allowed) {
+        if (file.type === 'application/pdf') {
+          nextResults[fileKey(file)] = { label: 'PDF', score: 1, ok: true };
+          accepted.push(file);
+          continue;
+        }
+        if (aiStatus !== 'ready' || !aiModel) {
+          invalid.push(`${file.name} (modele IA image indisponible)`);
+          continue;
+        }
         try {
           const result = await validateWithAi(file);
           nextResults[fileKey(file)] = result;
@@ -189,6 +203,7 @@ export default function UserGenerateCsrPage() {
 
   const goNext = () => {
     setError(null);
+    if (isCsrMode) return;
     if (step === 1) {
       const validation = validateStep1();
       if (validation) {
@@ -214,9 +229,29 @@ export default function UserGenerateCsrPage() {
 
   const onSubmit = async () => {
     setError(null);
+    if (isCsrMode) {
+      if (!requestId) return setError('Demande introuvable pour soumettre le CSR.');
+      if (!csrText.trim() && !csrFile) return setError('Un CSR (texte ou fichier) est requis.');
+
+      setSubmitting(true);
+      try {
+        const form = new FormData();
+        if (csrText.trim()) form.append('csr', csrText.trim());
+        else if (csrFile) form.append('csrFile', csrFile);
+        await userService.submitRequestCsr(requestId, form);
+        notify('success', 'CSR soumis avec succes. La demande repasse en verification finale admin.');
+        navigate('/requests');
+      } catch (err: any) {
+        setError(err?.response?.data?.message || err?.response?.data?.error || 'Erreur lors de la soumission du CSR.');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     const validation = validateStep1();
     if (validation) return setError(validation);
-    if (!csrText.trim() && !csrFile) return setError('Un CSR (texte ou fichier) est requis pour soumettre la demande.');
+    if (files.length === 0) return setError("Veuillez ajouter au moins une piece d'identite.");
 
     setSubmitting(true);
     try {
@@ -228,11 +263,9 @@ export default function UserGenerateCsrPage() {
       form.append('state', stateRegion || '');
       form.append('country', country || '');
       form.append('email', emailAddr || '');
-      if (csrText.trim()) form.append('csr', csrText.trim());
-      else if (csrFile) form.append('csrFile', csrFile);
       files.forEach((f) => form.append('documents', f));
       await userService.submitCertificateRequest(form);
-      notify('success', 'Demande soumise avec succes.');
+      notify('success', 'Demande soumise pour verification admin.');
       navigate('/requests');
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.response?.data?.error || 'Erreur lors de la soumission.');
@@ -248,13 +281,15 @@ export default function UserGenerateCsrPage() {
           <div>
             <h1 className="text-h3 font-semibold text-[var(--text-1)]">Nouvelle demande</h1>
             <div className="mt-1 text-sm text-[var(--text-3)]">
-              Etape {step}/3 - {step === 1 ? 'Informations du certificat' : step === 2 ? "Piece d'identite" : 'CSR'}
+              {isCsrMode
+                ? 'Etape CSR - Demande validee par admin'
+                : `Etape ${step}/${lastStep} - ${step === 1 ? 'Informations du certificat' : "Piece d'identite"}`}
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            <StepBadge active={step === 1} done={step > 1} label="1. Formulaire" />
-            <StepBadge active={step === 2} done={step > 2} label="2. Identite" />
-            <StepBadge active={step === 3} done={false} label="3. CSR" />
+          <div className={`grid gap-2 ${isCsrMode ? 'grid-cols-1' : 'grid-cols-2'}`}>
+            {!isCsrMode && <StepBadge active={step === 1} done={step > 1} label="1. Formulaire" />}
+            {!isCsrMode && <StepBadge active={step === 2} done={false} label="2. Identite" />}
+            {isCsrMode && <StepBadge active={step === 3} done={false} label="CSR autorise" />}
           </div>
         </div>
       </header>
@@ -282,10 +317,10 @@ export default function UserGenerateCsrPage() {
         <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
           <h2 className="mb-2 text-h3 font-semibold dark:text-neutral-100">Piece d'identite</h2>
           <div className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
-            Importez votre piece d'identite (CNI ou passeport). Seules les images sont acceptees.
+            Importez votre piece d'identite (CNI ou passeport). Images ou PDF sont acceptes.
           </div>
           <div className="mb-3 text-xs text-neutral-500 dark:text-neutral-400">
-            IA: {aiStatus === 'loading' ? 'chargement du modele...' : aiStatus === 'ready' ? 'active (CNI/Passeport)' : 'indisponible'}
+            IA navigateur: {aiStatus === 'loading' ? 'chargement du modele...' : aiStatus === 'ready' ? 'active pour images' : 'indisponible'}
             {aiError ? ` - ${aiError}` : ''}
           </div>
 
@@ -312,7 +347,7 @@ export default function UserGenerateCsrPage() {
             <button onClick={onBrowse} className="mt-2 inline-block rounded-lg border-2 border-primary-700 px-4 py-2 text-primary-700 dark:border-primary-300 dark:text-primary-300">
               Parcourir les fichiers
             </button>
-            <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => onFiles(e.target.files)} accept="image/*" />
+            <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => onFiles(e.target.files)} accept="image/png,image/jpeg,application/pdf" />
           </div>
 
           {files.length > 0 && (
@@ -384,7 +419,7 @@ export default function UserGenerateCsrPage() {
         <button className="rounded-lg border-2 border-primary-700 px-6 py-3 text-primary-700 dark:border-primary-300 dark:text-primary-300" onClick={() => navigate('/dashboard')}>
           Annuler
         </button>
-        {step > 1 && (
+        {step > 1 && !isCsrMode && (
           <button
             className="rounded-lg border border-neutral-300 bg-white px-6 py-3 font-semibold text-neutral-800 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
             onClick={goPrevious}
@@ -393,7 +428,7 @@ export default function UserGenerateCsrPage() {
             Precedent
           </button>
         )}
-        {step < 3 ? (
+        {step < lastStep ? (
           <button
             className="rounded-lg bg-primary-800 px-6 py-3 font-semibold text-white"
             onClick={goNext}
@@ -403,7 +438,7 @@ export default function UserGenerateCsrPage() {
           </button>
         ) : (
           <button className="rounded-lg bg-primary-800 px-6 py-3 font-semibold text-white" onClick={onSubmit} disabled={submitting}>
-            {submitting ? 'Envoi...' : 'Soumettre la demande'}
+            {submitting ? 'Envoi...' : isCsrMode ? 'Soumettre le CSR' : 'Soumettre pour verification'}
           </button>
         )}
       </div>
