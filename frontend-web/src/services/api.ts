@@ -325,6 +325,18 @@ export const userService = {
     return response.data as Blob;
   },
 
+  validateToken: async (
+    requestId: string,
+    token: string
+  ): Promise<{ certificateId: string; certificate: string; fingerprint: string; issuedAt: string; expiresAt: string }> => {
+    const response = await apiClient.post(
+      `/user/certificate-requests/${requestId}/validate-token`,
+      null,
+      { params: { token } }
+    );
+    return response.data;
+  },
+
   /**
    * Télécharger un certificat par ID
    */
@@ -333,6 +345,15 @@ export const userService = {
       params: { format },
       responseType: 'blob'
     });
+    return response.data as Blob;
+  },
+
+  downloadCertificateP12: async (certificateId: string, password: string): Promise<Blob> => {
+    const response = await apiClient.post(
+      `/user/certificates/${certificateId}/download-p12`,
+      null,
+      { params: { password }, responseType: 'blob' }
+    );
     return response.data as Blob;
   },
 

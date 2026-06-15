@@ -6,7 +6,8 @@ export default function UserCertificatesPage() {
   const [selectedCertId, setSelectedCertId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [downloading, setDownloading] = useState<'pem' | 'crt' | null>(null);
+  const [downloading, setDownloading] = useState<'pem' | 'crt' | 'p12' | null>(null);
+  const [p12Password, setP12Password] = useState('');
   const [renewMessage, setRenewMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -43,6 +44,27 @@ export default function UserCertificatesPage() {
       document.body.removeChild(a);
     } catch {
       setError('Erreur lors du telechargement du certificat.');
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  async function downloadP12() {
+    if (!cert?.id || !p12Password) return;
+    try {
+      setDownloading('p12');
+      const blob = await userService.downloadCertificateP12(cert.id, p12Password);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `certificate-${cert.id}.p12`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setP12Password('');
+    } catch {
+      setError('Erreur lors du téléchargement du fichier .p12.');
     } finally {
       setDownloading(null);
     }
@@ -164,6 +186,26 @@ export default function UserCertificatesPage() {
               {downloading === 'pem' ? 'Telechargement...' : 'Certificat (.pem)'}
             </button>
             <div className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">Le fichier .crt est compatible avec la plupart des navigateurs et applications.</div>
+
+            <div className="mt-4 border-t border-neutral-100 pt-4 dark:border-neutral-800">
+              <div className="mb-2 text-xs font-semibold text-neutral-700 dark:text-neutral-300">Export PKCS#12 (.p12)</div>
+              <input
+                type="password"
+                value={p12Password}
+                onChange={(e) => setP12Password(e.target.value)}
+                placeholder="Mot de passe de protection"
+                disabled={!cert || downloading !== null}
+                className="mb-2 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-800 placeholder-neutral-400 focus:border-primary-600 focus:outline-none disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
+              />
+              <button
+                onClick={downloadP12}
+                disabled={downloading !== null || !cert || !p12Password}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-primary-800 py-2.5 text-sm font-semibold text-primary-800 transition hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-primary-300 dark:text-primary-300 dark:hover:bg-primary-950/30"
+              >
+                {downloading === 'p12' ? 'Téléchargement...' : 'Certificat + clé (.p12)'}
+              </button>
+              <div className="mt-1 text-xs text-neutral-400 dark:text-neutral-500">Contient votre certificat et votre clé privée, protégé par mot de passe.</div>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-neutral-100 bg-white p-5 shadow dark:border-neutral-800 dark:bg-neutral-900">
