@@ -1,8 +1,8 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { AlertCircle, CheckCircle, Download, ArrowLeft } from 'lucide-react';
-import axios from 'axios';
+import { userService } from '../services/api';
 
 interface CertificateData {
   certificateId: string;
@@ -25,20 +25,17 @@ export default function UserValidateTokenPage() {
   const token = searchParams.get('token');
 
   useEffect(() => {
-    // Rediriger si non authentifiÃ©
     if (!isAuthenticated) {
       navigate('/login');
       return;
     }
 
-    // VÃ©rifier les paramÃ¨tres
     if (!requestId || !token) {
-      setError('ParamÃ¨tres manquants : requestId ou token');
+      setError('Paramètres manquants : requestId ou token');
       setLoading(false);
       return;
     }
 
-    // Valider le token
     validateToken();
   }, [requestId, token, isAuthenticated]);
 
@@ -47,26 +44,12 @@ export default function UserValidateTokenPage() {
       setLoading(true);
       setError(null);
 
-      const apiBaseUrl = (import.meta as any).env.VITE_API_URL || 'http://localhost:8080/api';
-      const authToken = localStorage.getItem('accessToken');
-      
-      const response = await axios.post<CertificateData>(
-        `${apiBaseUrl}/user/certificate-requests/${requestId}/validate-token`,
-        null,
-        {
-          params: { token },
-          headers: {
-            Authorization: `Bearer ${authToken}`
-          }
-        }
-      );
-
-      setCertificate(response.data);
+      const data = await userService.validateToken(requestId!, token!);
+      setCertificate(data);
       setSuccess(true);
     } catch (err: any) {
       console.error('Erreur lors de la validation du token:', err);
-      const message = err.response?.data?.error || err.message || 'Erreur lors de la validation';
-      setError(message);
+      setError(err.message || 'Erreur lors de la validation');
     } finally {
       setLoading(false);
     }
@@ -90,7 +73,7 @@ export default function UserValidateTokenPage() {
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-h3 font-semibold text-[var(--text-1)]">Validation du certificat</h1>
-            <p className="mt-1 text-sm text-[var(--text-3)]">Validation du token et recuperation du certificat.</p>
+            <p className="mt-1 text-sm text-[var(--text-3)]">Validation du token et récupération du certificat.</p>
           </div>
           <button
             onClick={() => navigate('/dashboard')}
@@ -128,13 +111,13 @@ export default function UserValidateTokenPage() {
           <div className="space-y-6">
             <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200">
               <CheckCircle size={18} className="flex-shrink-0" />
-              Certificat valide avec succes.
+              Certificat validé avec succès.
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <Detail label="ID certificat" value={certificate.certificateId} mono />
               <Detail label="Empreinte" value={certificate.fingerprint} mono />
-              <Detail label="Delivre le" value={new Date(certificate.issuedAt).toLocaleDateString('fr-FR')} />
+              <Detail label="Délivré le" value={new Date(certificate.issuedAt).toLocaleDateString('fr-FR')} />
               <Detail label="Expire le" value={new Date(certificate.expiresAt).toLocaleDateString('fr-FR')} />
             </div>
 
@@ -144,7 +127,7 @@ export default function UserValidateTokenPage() {
                 className="inline-flex items-center gap-2 rounded-lg bg-primary-800 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
               >
                 <Download size={16} />
-                Telecharger le certificat
+                Télécharger le certificat
               </button>
               <button
                 onClick={() => navigate('/dashboard')}
@@ -155,7 +138,7 @@ export default function UserValidateTokenPage() {
             </div>
 
             <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-xs text-neutral-600 dark:border-neutral-800 dark:bg-neutral-950/40 dark:text-neutral-300">
-              <div className="mb-2 font-semibold">Apercu PEM</div>
+              <div className="mb-2 font-semibold">Aperçu PEM</div>
               <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words">{certificate.certificate.substring(0, 200)}...</pre>
             </div>
           </div>
@@ -177,4 +160,3 @@ function Detail({ label, value, mono }: { label: string; value: string; mono?: b
     </div>
   );
 }
-
