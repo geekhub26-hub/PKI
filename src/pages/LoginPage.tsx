@@ -1,10 +1,61 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Eye, EyeOff, Moon, Sun } from 'lucide-react';
-import { authService } from '../services/api';
+import { authService, JwtResponse } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { useThemeStore } from '../stores/themeStore';
-import { notify } from '../utils/notify';
+
+/* ── Décoration coins ── */
+function GridDecor() {
+  return (
+    <svg viewBox="0 0 450 450" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full opacity-60">
+      {Array.from({ length: 10 }, (_, row) =>
+        Array.from({ length: 10 }, (_, col) => (
+          <circle
+            key={`${row}-${col}`}
+            cx={col * 50 + 25}
+            cy={row * 45 + 25}
+            r="2"
+            fill="currentColor"
+            className="text-gray-300 dark:text-gray-700"
+          />
+        ))
+      )}
+    </svg>
+  );
+}
+
+function SuccessIllustration() {
+  return (
+    <svg viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full">
+      <circle cx="80" cy="80" r="70" fill="#D1FAE5" className="dark:fill-emerald-950/60" />
+      <circle cx="80" cy="80" r="55" fill="#A7F3D0" className="dark:fill-emerald-900/60" />
+      <circle cx="80" cy="80" r="38" fill="#10B981" />
+      <path d="M58 80l14 14 30-30" stroke="white" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+function FullPageLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative z-1 flex min-h-screen flex-col items-center justify-center overflow-hidden bg-white p-6 dark:bg-gray-900">
+      <div className="pointer-events-none absolute right-0 top-0 -z-10 w-full max-w-[250px] xl:max-w-[450px]">
+        <GridDecor />
+      </div>
+      <div className="pointer-events-none absolute bottom-0 left-0 -z-10 w-full max-w-[250px] rotate-180 xl:max-w-[450px]">
+        <GridDecor />
+      </div>
+      <div className="mx-auto w-full max-w-[274px] text-center sm:max-w-[555px]">
+        {children}
+      </div>
+      <p className="absolute bottom-6 left-1/2 -translate-x-1/2 text-center text-sm text-gray-500 dark:text-gray-400">
+        © 2026 - PKI Souverain
+      </p>
+    </div>
+  );
+}
+
+/* ── Page principale ── */
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -19,12 +70,20 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const [pendingAuth, setPendingAuth] = useState<JwtResponse | null>(null);
 
+  /* Redirige si déjà connecté à l'arrivée sur la page */
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (isAuthenticated && user && !success) {
       navigate(user.role === 'ADMIN' ? '/admin/dashboard' : '/dashboard', { replace: true });
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, user]);
+
+  const goToDashboard = (auth: JwtResponse) => {
+    setUser(auth.user);
+    navigate(auth.user.role === 'ADMIN' ? '/admin/dashboard' : '/dashboard', { replace: true });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,8 +91,9 @@ export default function LoginPage() {
     setError('');
     try {
       const response = await authService.login({ email, password });
-      setUser(response.user);
-      notify('success', 'Connexion réussie.');
+      setPendingAuth(response);
+      setSuccess(true);
+      setTimeout(() => goToDashboard(response), 2000);
     } catch (err: any) {
       setError(err.message || 'Email ou mot de passe invalide.');
     } finally {
@@ -44,10 +104,34 @@ export default function LoginPage() {
   const inputClass =
     'h-11 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 shadow-sm transition focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder-white/30 dark:focus:border-primary-700';
 
+  /* ── Écran de succès ── */
+  if (success && pendingAuth) {
+    return (
+      <FullPageLayout>
+        <div className="mx-auto mb-10 w-full max-w-[100px] sm:max-w-[160px]">
+          <SuccessIllustration />
+        </div>
+        <h1 className="mb-2 text-2xl font-bold text-gray-800 dark:text-white/90 xl:text-4xl">
+          SUCCÈS !
+        </h1>
+        <p className="mb-6 mt-6 text-base text-gray-700 dark:text-gray-400 sm:text-lg">
+          Connexion réussie. Vous allez être redirigé vers votre espace.
+        </p>
+        <button
+          onClick={() => goToDashboard(pendingAuth)}
+          className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-5 py-3.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200"
+        >
+          Accéder à mon espace
+        </button>
+      </FullPageLayout>
+    );
+  }
+
+  /* ── Formulaire de connexion ── */
   return (
     <div className="relative flex h-screen w-full flex-col overflow-hidden bg-white dark:bg-gray-900 lg:flex-row">
 
-      {/* ── LEFT PANEL ── */}
+      {/* LEFT PANEL */}
       <div className="flex flex-1 flex-col overflow-y-auto lg:w-1/2">
         <div className="w-full max-w-md mx-auto px-6 pt-6 sm:pt-10">
           <Link
@@ -60,7 +144,6 @@ export default function LoginPage() {
         </div>
 
         <div className="flex flex-1 flex-col justify-center w-full max-w-md mx-auto px-6 py-8">
-          {/* Heading */}
           <div className="mb-6 sm:mb-8">
             <h1 className="mb-2 text-2xl font-semibold text-gray-800 dark:text-white/90 sm:text-3xl">
               Se connecter
@@ -147,7 +230,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Remember me + Forgot password */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <input
@@ -161,10 +243,7 @@ export default function LoginPage() {
                   Rester connecté
                 </label>
               </div>
-              <Link
-                to="/forgot-password"
-                className="text-sm text-primary-500 hover:text-primary-600 dark:text-primary-400"
-              >
+              <Link to="/forgot-password" className="text-sm text-primary-500 hover:text-primary-600 dark:text-primary-400">
                 Mot de passe oublié ?
               </Link>
             </div>
@@ -193,18 +272,16 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ── RIGHT PANEL ── */}
+      {/* RIGHT PANEL */}
       <div className="hidden items-center justify-center bg-primary-900 dark:bg-white/5 lg:flex lg:w-1/2">
         <div className="relative flex flex-col items-center max-w-xs px-8 text-center">
           <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-primary-700/25 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-primary-800/30 blur-3xl" />
-
           <div className="relative mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
           </div>
-
           <h2 className="mb-3 text-xl font-bold text-white">PKI Souverain</h2>
           <p className="text-sm leading-relaxed text-gray-400 dark:text-white/60">
             Infrastructure à clé publique souveraine du Cameroun. Émettez, gérez et révoquez vos certificats numériques X.509 en toute sécurité.
@@ -212,7 +289,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ── Dark mode toggle ── */}
+      {/* Dark mode toggle */}
       <button
         onClick={toggleTheme}
         aria-label="Basculer le thème"
