@@ -232,6 +232,8 @@ export default function UserGenerateCsrPage() {
     if (!identityDocumentNumber.trim()) return "Le numero de piece d'identite est requis";
     if (!identityDocumentExpiry.trim()) return "La date d'expiration de la piece est requise";
     if (!emailAddr.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailAddr.trim())) return 'Un email valide est requis';
+    if (!organization.trim()) return "L'organisation (O) est requise";
+    if (!locality.trim()) return 'La ville (L) est requise';
     return null;
   };
 
@@ -407,6 +409,8 @@ export default function UserGenerateCsrPage() {
             <Field label="Type de piece *" value={identityDocumentType} onChange={(v) => setIdentityDocumentType(v.toUpperCase())} placeholder="CNI ou PASSPORT" />
             <Field label="Numero de piece *" value={identityDocumentNumber} onChange={setIdentityDocumentNumber} placeholder="123456789" />
             <Field label="Expiration de la piece *" value={identityDocumentExpiry} onChange={setIdentityDocumentExpiry} placeholder="2030-12-31" type="date" />
+            <Field label="Organisation (O) *" value={organization} onChange={setOrganization} placeholder="Ministere de l'Interieur" help="Votre organisation ou employeur" />
+            <Field label="Ville (L) *" value={locality} onChange={setLocality} placeholder="Yaounde" />
           </div>
         </div>
       )}
