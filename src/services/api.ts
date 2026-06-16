@@ -334,7 +334,7 @@ export const userService = {
       null,
       { params: { token } }
     );
-    return response.data;
+    return response.data as { certificateId: string; certificate: string; fingerprint: string; issuedAt: string; expiresAt: string };
   },
 
   /**
