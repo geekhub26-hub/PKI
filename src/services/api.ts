@@ -89,7 +89,7 @@ apiClient.interceptors.response.use(
       // Token expiré : redirection vers login
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
-      window.location.href = '/login';
+      window.location.href = '/#/login';
     }
     return Promise.reject(error);
   }
@@ -185,7 +185,7 @@ export const authService = {
   logout: () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
-    window.location.href = '/login';
+    window.location.href = '/#/login';
   },
 
   /**
