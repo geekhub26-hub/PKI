@@ -10,7 +10,7 @@ export default function UserGenerateCsrPage() {
   const requestId = searchParams.get('id');
   const mode = searchParams.get('mode') || 'new';
   const isCsrMode = mode === 'csr' && !!requestId;
-  const lastStep: 3 = 3;
+  const lastStep = isCsrMode ? 3 : 2;
   const [step, setStep] = useState<1 | 2 | 3>(() => (isCsrMode ? 3 : 1));
   const [files, setFiles] = useState<File[]>([]);
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
@@ -307,8 +307,6 @@ export default function UserGenerateCsrPage() {
     if (personalValidation) return setError(personalValidation);
     const identityValidation = validateIdentityStep();
     if (identityValidation) return setError(identityValidation);
-    const validation = validateCertificateStep();
-    if (validation) return setError(validation);
 
     setSubmitting(true);
     try {
@@ -385,9 +383,9 @@ export default function UserGenerateCsrPage() {
           </div>
           <div className={`grid gap-2 ${isCsrMode ? 'grid-cols-1' : 'grid-cols-3'}`}>
             {!isCsrMode && <StepBadge active={step === 1} done={step > 1} label="1. Personnel" />}
-            {!isCsrMode && <StepBadge active={step === 2} done={step > 2} label="2. Identite" />}
-            {!isCsrMode && <StepBadge active={step === 3} done={false} label="3. Entreprise & CSR" />}
-            {isCsrMode && <StepBadge active={step === 3} done={false} label="CSR autorise" />}
+            {!isCsrMode && <StepBadge active={step === 2} done={false} label="2. Identité & docs" />}
+            {!isCsrMode && <StepBadge active={false} done={false} label="3. CSR (admin requis)" locked />}
+            {isCsrMode && <StepBadge active={step === 3} done={false} label="CSR autorisé" />}
           </div>
         </div>
       </header>
@@ -506,7 +504,7 @@ export default function UserGenerateCsrPage() {
         </div>
       )}
 
-      {step === 3 && (
+      {step === 3 && isCsrMode && (
         <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
           <h2 className="mb-2 text-h3 font-semibold dark:text-neutral-100">Entreprise et CSR</h2>
           <div className="mb-3 text-sm text-neutral-500 dark:text-neutral-400">
@@ -610,18 +608,20 @@ export default function UserGenerateCsrPage() {
   );
 }
 
-function StepBadge({ label, active, done }: { label: string; active: boolean; done: boolean }) {
+function StepBadge({ label, active, done, locked = false }: { label: string; active: boolean; done: boolean; locked?: boolean }) {
   return (
     <div
       className={`rounded-lg border px-3 py-2 text-center text-sm font-semibold ${
-        done
-          ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300'
-          : active
-            ? 'border-primary-300 bg-primary-50 text-primary-700 dark:border-primary-800 dark:bg-primary-950/30 dark:text-primary-300'
-            : 'border-neutral-200 bg-neutral-50 text-neutral-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400'
+        locked
+          ? 'border-neutral-200 bg-neutral-50 text-neutral-400 opacity-60 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-500'
+          : done
+            ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300'
+            : active
+              ? 'border-primary-300 bg-primary-50 text-primary-700 dark:border-primary-800 dark:bg-primary-950/30 dark:text-primary-300'
+              : 'border-neutral-200 bg-neutral-50 text-neutral-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400'
       }`}
     >
-      {label}
+      {locked ? '🔒 ' : ''}{label}
     </div>
   );
 }
