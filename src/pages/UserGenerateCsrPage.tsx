@@ -21,7 +21,7 @@ export default function UserGenerateCsrPage() {
   const [lastName, setLastName] = useState<string>('');
   const [birthDate, setBirthDate] = useState<string>('');
   const [birthPlace, setBirthPlace] = useState<string>('');
-  const [nationality, setNationality] = useState<string>('Camerounaise');
+  const [nationality, setNationality] = useState<string>('CM');
   const [identityDocumentType, setIdentityDocumentType] = useState<string>('CNI');
   const [identityDocumentNumber, setIdentityDocumentNumber] = useState<string>('');
   const [identityDocumentExpiry, setIdentityDocumentExpiry] = useState<string>('');
@@ -404,7 +404,7 @@ export default function UserGenerateCsrPage() {
             <Field label="Nom *" value={lastName} onChange={setLastName} placeholder="Fadil" />
             <Field label="Date de naissance *" value={birthDate} onChange={setBirthDate} placeholder="1995-01-31" type="date" />
             <Field label="Lieu de naissance *" value={birthPlace} onChange={setBirthPlace} placeholder="Yaounde" />
-            <Field label="Nationalite *" value={nationality} onChange={setNationality} placeholder="Camerounaise" />
+            <Field label="Nationalite * (code 2 lettres)" value={nationality} onChange={(v) => setNationality(v.toUpperCase().slice(0, 2))} placeholder="CM" help="Ex: CM, FR, US" />
             <Field label="Email *" value={emailAddr} onChange={setEmailAddr} placeholder="japhet.fadil@organisation.fr" wide />
             <Field label="Type de piece *" value={identityDocumentType} onChange={(v) => setIdentityDocumentType(v.toUpperCase())} placeholder="CNI ou PASSPORT" />
             <Field label="Numero de piece *" value={identityDocumentNumber} onChange={setIdentityDocumentNumber} placeholder="123456789" />
