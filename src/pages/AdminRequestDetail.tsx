@@ -131,6 +131,26 @@ export default function AdminRequestDetail() {
     }
   };
 
+  const handleGenererRecepisse = async () => {
+    if (!id) return;
+    setBusy(true);
+    try {
+      const token = localStorage.getItem('accessToken');
+      const res = await fetch(
+        `${(import.meta as any).env.VITE_API_URL || 'http://localhost:8080/api'}/admin/recepisses/generer/${id}`,
+        { method: 'POST', headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Erreur');
+      addToast({ type: 'success', message: `Récépissé ${data.numero} généré avec succès.` });
+      await load();
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message || 'Impossible de générer le récépissé.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const copyPemToClipboard = async () => {
     if (!pemText) return;
     await navigator.clipboard.writeText(pemText);
@@ -293,7 +313,17 @@ export default function AdminRequestDetail() {
             </>
           )}
 
-          {!(request.status === 'PENDING_REVIEW' || request.status === 'PENDING' || request.status === 'CSR_SUBMITTED' || request.status === 'REVIEW_APPROVED') && (
+          {(request.status === 'REVIEW_APPROVED' || request.status === 'ISSUED') && (
+            <button
+              disabled={busy}
+              onClick={handleGenererRecepisse}
+              className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-60"
+            >
+              {busy ? 'Génération...' : 'Générer récépissé'}
+            </button>
+          )}
+
+          {!(request.status === 'PENDING_REVIEW' || request.status === 'PENDING' || request.status === 'CSR_SUBMITTED' || request.status === 'REVIEW_APPROVED' || request.status === 'ISSUED') && (
             <div className="rounded-xl border border-dashed border-neutral-300 bg-neutral-50 p-4 text-sm text-neutral-500 dark:border-neutral-700 dark:bg-neutral-950/40 dark:text-neutral-300">
               Aucune action disponible pour le statut actuel.
             </div>

@@ -19,10 +19,12 @@ import {
   UserCog,
   Menu,
   X,
+  ClipboardList,
 } from 'lucide-react';
 
 const userLinks = [
   { to: '/dashboard', label: 'Tableau de bord', icon: LayoutGrid },
+  { to: '/recepisses', label: 'Mes récépissés', icon: ClipboardList },
   { to: '/certificates', label: 'Mes certificats', icon: Award },
   { to: '/request-pipeline', label: 'Demandes en cours', icon: CheckSquare },
   { to: '/generate-csr', label: 'Nouvelle demande', icon: FileText },

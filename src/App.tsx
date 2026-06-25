@@ -24,6 +24,8 @@ import UserGenerateCsrPage from './pages/UserGenerateCsrPage';
 import UserRequestPipelinePage from './pages/UserRequestPipelinePage';
 import UserRevokeCertificatePage from './pages/UserRevokeCertificatePage';
 import UserValidateTokenPage from './pages/UserValidateTokenPage';
+import UserRecepisses from './pages/UserRecepisses';
+import VerifyPage from './pages/VerifyPage';
 import { AdminRequestDetail, AdminRequestsList, UserRequestsPage } from './pages';
 import { userService } from './services/api';
 import { useAuthStore } from './stores/authStore';
@@ -82,6 +84,7 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/validate-token" element={<UserValidateTokenPage />} />
+          <Route path="/verify" element={<VerifyPage />} />
 
           <Route
             element={
@@ -103,6 +106,7 @@ function App() {
             <Route path="/requests" element={<UserRequestsPage />} />
             <Route path="/revoke-certificate" element={<UserRevokeCertificatePage />} />
             <Route path="/download-crl" element={<UserDownloadCrlPage />} />
+            <Route path="/recepisses" element={<UserRecepisses />} />
 
             <Route path="/admin/dashboard" element={<DashboardAdminPage />} />
             <Route path="/admin/stats" element={<AdminStatsPage />} />
