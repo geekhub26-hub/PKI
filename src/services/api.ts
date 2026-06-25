@@ -103,7 +103,7 @@ export interface User {
   email: string;
   firstName: string;
   lastName: string;
-  role: 'ADMIN' | 'USER';
+  role: 'ADMIN' | 'USER' | 'SUPER_ADMIN';
   isActive: boolean;
   emailVerified: boolean;
   createdAt: string;

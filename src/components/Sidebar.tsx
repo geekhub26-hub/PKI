@@ -20,6 +20,8 @@ import {
   Menu,
   X,
   ClipboardList,
+  Settings2,
+  ShieldCheck,
 } from 'lucide-react';
 
 const userLinks = [
@@ -36,6 +38,7 @@ const userLinks = [
 const adminLinks = [
   { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutGrid },
   { to: '/admin/stats', label: 'Statistiques', icon: BarChart3 },
+  { to: '/admin/recepisses/stats', label: 'Récépissés', icon: ClipboardList },
   { to: '/admin/requests', label: 'Gerer demandes', icon: CheckSquare },
   { to: '/admin/generate-ca', label: 'Generer AC', icon: Key },
   { to: '/admin/sign-csr', label: 'Signer CSR', icon: Award },
@@ -45,12 +48,17 @@ const adminLinks = [
   { to: '/admin/audit', label: 'Journal audit', icon: FileText },
 ];
 
+const superAdminLinks = [
+  { to: '/superadmin/settings', label: 'Paramètres système', icon: Settings2 },
+];
+
 export default function Sidebar() {
   const { user } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const links = user?.role === 'ADMIN' ? adminLinks : userLinks;
+  const isAdminLike = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+  const links = isAdminLike ? adminLinks : userLinks;
 
   useEffect(() => {
     setMobileOpen(false);
@@ -108,7 +116,14 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {user?.role === 'ADMIN' ? (
+        {user?.role === 'SUPER_ADMIN' ? (
+          <div className="mb-6 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-center dark:border-purple-900/60 dark:bg-purple-950/40">
+            <div className="flex items-center justify-center gap-2 text-xs font-bold text-purple-700 dark:text-purple-300">
+              <ShieldCheck size={14} /> SUPER ADMIN
+            </div>
+            <div className="mt-0.5 text-xs text-purple-600 dark:text-purple-300/80">{user?.email}</div>
+          </div>
+        ) : user?.role === 'ADMIN' ? (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-center dark:border-red-900/60 dark:bg-red-950/40">
             <div className="flex items-center justify-center gap-2 text-xs font-bold text-red-700 dark:text-red-300">
               <UserCog size={14} /> ADMINISTRATEUR
@@ -145,6 +160,36 @@ export default function Sidebar() {
               </Link>
             );
           })}
+
+          {user?.role === 'SUPER_ADMIN' && (
+            <>
+              <div className="pt-3 pb-1 px-1">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-purple-400 dark:text-purple-500">
+                  Administration système
+                </span>
+              </div>
+              {superAdminLinks.map((link) => {
+                const Icon = link.icon;
+                const active = isActive(link.to);
+                return (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    className={clsx(
+                      'flex items-center space-x-3 rounded-lg px-4 py-3 transition-all duration-200',
+                      active
+                        ? 'border border-purple-200 bg-purple-50 font-semibold text-purple-700 shadow-sm dark:border-purple-900 dark:bg-purple-950/40 dark:text-purple-200'
+                        : 'text-neutral-700 hover:bg-neutral-50 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-neutral-100'
+                    )}
+                  >
+                    <Icon size={18} className="flex-shrink-0" />
+                    <span className="text-sm font-medium">{link.label}</span>
+                    {active && <ChevronRight size={16} className="ml-auto" />}
+                  </Link>
+                );
+              })}
+            </>
+          )}
         </nav>
 
         <div className="mb-6 border-t border-neutral-200 dark:border-neutral-800" />

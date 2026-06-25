@@ -26,6 +26,8 @@ import UserRevokeCertificatePage from './pages/UserRevokeCertificatePage';
 import UserValidateTokenPage from './pages/UserValidateTokenPage';
 import UserRecepisses from './pages/UserRecepisses';
 import VerifyPage from './pages/VerifyPage';
+import SuperAdminSettingsPage from './pages/SuperAdminSettingsPage';
+import AdminRecepisseStatsPage from './pages/AdminRecepisseStatsPage';
 import { AdminRequestDetail, AdminRequestsList, UserRequestsPage } from './pages';
 import { userService } from './services/api';
 import { useAuthStore } from './stores/authStore';
@@ -119,6 +121,8 @@ function App() {
             <Route path="/admin/requests" element={<AdminRequestsList />} />
             <Route path="/admin/requests/:id" element={<AdminRequestDetail />} />
             <Route path="/admin/audit" element={<AdminAuditPage />} />
+            <Route path="/admin/recepisses/stats" element={<AdminRecepisseStatsPage />} />
+            <Route path="/superadmin/settings" element={<SuperAdminSettingsPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" />} />
@@ -135,7 +139,7 @@ function ProtectedRoute({ children, adminOnly = false }: any) {
     return <Navigate to="/login" />;
   }
 
-  if (adminOnly && user?.role !== 'ADMIN') {
+  if (adminOnly && user?.role !== 'ADMIN' && user?.role !== 'SUPER_ADMIN') {
     return <Navigate to="/dashboard" />;
   }
 
