@@ -28,6 +28,7 @@ import UserRecepisses from './pages/UserRecepisses';
 import VerifyPage from './pages/VerifyPage';
 import SuperAdminSettingsPage from './pages/SuperAdminSettingsPage';
 import AdminRecepisseStatsPage from './pages/AdminRecepisseStatsPage';
+import OtpVerificationPage from './pages/OtpVerificationPage';
 import { AdminRequestDetail, AdminRequestsList, UserRequestsPage } from './pages';
 import { userService } from './services/api';
 import { useAuthStore } from './stores/authStore';
@@ -111,6 +112,7 @@ function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/validate-token" element={<UserValidateTokenPage />} />
           <Route path="/verify" element={<VerifyPage />} />
+          <Route path="/verify-email" element={<OtpVerificationPage />} />
 
           <Route
             element={
@@ -165,7 +167,8 @@ function ProtectedRoute({ children, adminOnly = false }: any) {
     return <Navigate to="/login" />;
   }
 
-  if (adminOnly && user?.role !== 'ADMIN' && user?.role !== 'SUPER_ADMIN') {
+  const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'AE_CENTRALE', 'ADMIN_AEL', 'AEL'];
+  if (adminOnly && !adminRoles.includes(user?.role ?? '')) {
     return <Navigate to="/dashboard" />;
   }
 

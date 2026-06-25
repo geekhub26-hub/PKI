@@ -103,7 +103,7 @@ export interface User {
   email: string;
   firstName: string;
   lastName: string;
-  role: 'ADMIN' | 'USER' | 'SUPER_ADMIN';
+  role: 'ADMIN' | 'USER' | 'SUPER_ADMIN' | 'AE_CENTRALE' | 'ADMIN_AEL' | 'AEL';
   isActive: boolean;
   emailVerified: boolean;
   createdAt: string;
@@ -128,6 +128,16 @@ export interface JwtResponse {
   tokenType: string;
   expiresIn: number;
   user: User;
+}
+
+export interface OtpRequiredResponse {
+  status: 'OTP_REQUIRED';
+  email: string;
+}
+
+export interface TwoFaRequiredResponse {
+  status: '2FA_REQUIRED';
+  pendingToken: string;
 }
 
 export interface DashboardData {
@@ -155,25 +165,36 @@ export const authService = {
   /**
    * Inscription
    */
-  register: async (data: RegisterRequest): Promise<User> => {
-    const payload = {
-      ...data,
-      email: data.email.trim().toLowerCase(),
-    };
-    const response = await apiClient.post<User>('/auth/register', payload);
+  register: async (data: RegisterRequest): Promise<OtpRequiredResponse> => {
+    const payload = { ...data, email: data.email.trim().toLowerCase() };
+    const response = await apiClient.post<OtpRequiredResponse>('/auth/register', payload);
     return response.data;
   },
 
+  verifyOtp: async (email: string, code: string): Promise<User> => {
+    const response = await apiClient.post<User>('/auth/verify-otp', { email, code });
+    return response.data;
+  },
+
+  resendOtp: async (email: string): Promise<void> => {
+    await apiClient.post('/auth/resend-otp', { email });
+  },
+
   /**
-   * Connexion
+   * Connexion — retourne JwtResponse ou TwoFaRequiredResponse
    */
-  login: async (data: LoginRequest): Promise<JwtResponse> => {
-    const payload = {
-      ...data,
-      email: data.email.trim().toLowerCase(),
-    };
-    const response = await apiClient.post<JwtResponse>('/auth/login', payload);
-    // Stocker les tokens
+  login: async (data: LoginRequest): Promise<JwtResponse | TwoFaRequiredResponse> => {
+    const payload = { ...data, email: data.email.trim().toLowerCase() };
+    const response = await apiClient.post<JwtResponse | TwoFaRequiredResponse>('/auth/login', payload);
+    if ((response.data as any).status === '2FA_REQUIRED') return response.data;
+    const jwt = response.data as JwtResponse;
+    localStorage.setItem('accessToken', jwt.accessToken);
+    localStorage.setItem('refreshToken', jwt.refreshToken);
+    return jwt;
+  },
+
+  verify2Fa: async (pendingToken: string, code: string): Promise<JwtResponse> => {
+    const response = await apiClient.post<JwtResponse>('/auth/verify-2fa', { pendingToken, code });
     localStorage.setItem('accessToken', response.data.accessToken);
     localStorage.setItem('refreshToken', response.data.refreshToken);
     return response.data;

@@ -4,11 +4,9 @@ import { ChevronLeft, Eye, EyeOff, Moon, Sun } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useThemeStore } from '../stores/themeStore';
 import { authService } from '../services/api';
-import { notify } from '../utils/notify';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const setUser = useAuthStore((s) => s.setUser);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
   const { theme, toggleTheme } = useThemeStore();
@@ -37,10 +35,8 @@ export default function RegisterPage() {
     setLoading(true);
     setError('');
     try {
-      await authService.register({ email, password, firstName, lastName });
-      const auth = await authService.login({ email, password });
-      setUser(auth.user);
-      notify('success', 'Compte créé avec succès.');
+      const res = await authService.register({ email, password, firstName, lastName });
+      navigate(`/verify-email?email=${encodeURIComponent(res.email)}`, { replace: true });
     } catch (err: any) {
       setError(err.message || "Erreur lors de l'inscription.");
     } finally {

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Eye, EyeOff, Moon, Sun } from 'lucide-react';
+import { useRef, useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { ChevronLeft, Eye, EyeOff, Moon, Sun, ShieldCheck } from 'lucide-react';
 import { authService, JwtResponse } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { useThemeStore } from '../stores/themeStore';
@@ -59,6 +59,7 @@ function FullPageLayout({ children }: { children: React.ReactNode }) {
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const setUser = useAuthStore((s) => s.setUser);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
@@ -73,16 +74,29 @@ export default function LoginPage() {
   const [success, setSuccess] = useState(false);
   const [pendingAuth, setPendingAuth] = useState<JwtResponse | null>(null);
 
-  /* Redirige si déjà connecté à l'arrivée sur la page */
+  // État 2FA
+  const [twoFaPending, setTwoFaPending] = useState<string | null>(null);
+  const [twoFaDigits, setTwoFaDigits] = useState(['', '', '', '', '', '']);
+  const [twoFaLoading, setTwoFaLoading] = useState(false);
+  const r0 = useRef<HTMLInputElement>(null);
+  const r1 = useRef<HTMLInputElement>(null);
+  const r2 = useRef<HTMLInputElement>(null);
+  const r3 = useRef<HTMLInputElement>(null);
+  const r4 = useRef<HTMLInputElement>(null);
+  const r5 = useRef<HTMLInputElement>(null);
+  const twoFaRefs = [r0, r1, r2, r3, r4, r5];
+
+  const verifiedMsg = searchParams.get('verified') === '1';
+
   useEffect(() => {
     if (isAuthenticated && user && !success) {
-      navigate(user.role === 'ADMIN' ? '/admin/dashboard' : '/dashboard', { replace: true });
+      navigate(user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' ? '/admin/dashboard' : '/dashboard', { replace: true });
     }
   }, [isAuthenticated, user]);
 
   const goToDashboard = (auth: JwtResponse) => {
     setUser(auth.user);
-    navigate(auth.user.role === 'ADMIN' ? '/admin/dashboard' : '/dashboard', { replace: true });
+    navigate(auth.user.role === 'ADMIN' || auth.user.role === 'SUPER_ADMIN' ? '/admin/dashboard' : '/dashboard', { replace: true });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -91,9 +105,14 @@ export default function LoginPage() {
     setError('');
     try {
       const response = await authService.login({ email, password });
-      setPendingAuth(response);
+      if ((response as any).status === '2FA_REQUIRED') {
+        setTwoFaPending((response as any).pendingToken);
+        return;
+      }
+      const jwt = response as JwtResponse;
+      setPendingAuth(jwt);
       setSuccess(true);
-      setTimeout(() => goToDashboard(response), 2000);
+      setTimeout(() => goToDashboard(jwt), 2000);
     } catch (err: any) {
       setError(err.message || 'Email ou mot de passe invalide.');
     } finally {
@@ -101,8 +120,87 @@ export default function LoginPage() {
     }
   };
 
+  const handleTwoFaDigit = (i: number, val: string) => {
+    if (!/^\d*$/.test(val)) return;
+    const next = [...twoFaDigits];
+    next[i] = val.slice(-1);
+    setTwoFaDigits(next);
+    if (val && i < 5) twoFaRefs[i + 1].current?.focus();
+  };
+
+  const handleTwoFaKey = (i: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !twoFaDigits[i] && i > 0) twoFaRefs[i - 1].current?.focus();
+  };
+
+  const submitTwoFa = async () => {
+    const code = twoFaDigits.join('');
+    if (code.length < 6) return;
+    setTwoFaLoading(true);
+    setError('');
+    try {
+      const jwt = await authService.verify2Fa(twoFaPending!, code);
+      setPendingAuth(jwt);
+      setSuccess(true);
+      setTimeout(() => goToDashboard(jwt), 2000);
+    } catch (err: any) {
+      setError(err.message || 'Code 2FA invalide.');
+      setTwoFaDigits(['', '', '', '', '', '']);
+      twoFaRefs[0].current?.focus();
+    } finally {
+      setTwoFaLoading(false);
+    }
+  };
+
   const inputClass =
     'h-11 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 shadow-sm transition focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder-white/30 dark:focus:border-primary-700';
+
+  /* ── Écran 2FA ── */
+  if (twoFaPending) {
+    const digitClass = 'h-14 w-12 rounded-xl border border-gray-300 bg-transparent text-center text-xl font-bold text-gray-800 shadow-sm transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90';
+    return (
+      <FullPageLayout>
+        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-50 dark:bg-primary-950/40">
+          <ShieldCheck size={32} className="text-primary-600 dark:text-primary-400" />
+        </div>
+        <h1 className="mb-2 text-2xl font-bold text-gray-800 dark:text-white/90">Vérification en 2 étapes</h1>
+        <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
+          Un code à 6 chiffres a été envoyé à votre adresse email.
+        </p>
+        <div className="flex justify-center gap-2 mb-4">
+          {twoFaDigits.map((d, i) => (
+            <input
+              key={i}
+              ref={twoFaRefs[i]}
+              type="text"
+              inputMode="numeric"
+              maxLength={1}
+              value={d}
+              onChange={(e) => handleTwoFaDigit(i, e.target.value)}
+              onKeyDown={(e) => handleTwoFaKey(i, e)}
+              className={digitClass}
+              autoFocus={i === 0}
+            />
+          ))}
+        </div>
+        {error && (
+          <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>
+        )}
+        {verifiedMsg && (
+          <p className="mb-3 text-sm text-emerald-600 dark:text-emerald-400">Email vérifié. Connectez-vous maintenant.</p>
+        )}
+        <button
+          onClick={submitTwoFa}
+          disabled={twoFaLoading || twoFaDigits.join('').length < 6}
+          className="w-full rounded-lg bg-primary-600 px-4 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 disabled:opacity-60"
+        >
+          {twoFaLoading ? 'Vérification...' : 'Confirmer'}
+        </button>
+        <button onClick={() => setTwoFaPending(null)} className="mt-4 text-sm text-gray-400 hover:text-gray-600">
+          ← Retour
+        </button>
+      </FullPageLayout>
+    );
+  }
 
   /* ── Écran de succès ── */
   if (success && pendingAuth) {

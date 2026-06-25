@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ClipboardList, TrendingUp, CheckCircle, Clock,
-  XCircle, AlertCircle, RefreshCw, BarChart2,
+  XCircle, AlertCircle, RefreshCw, BarChart2, Download,
 } from 'lucide-react';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:8080/api';
@@ -37,6 +37,26 @@ export default function AdminRecepisseStatsPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const r = await fetch(`${API_BASE}/admin/recepisses/export`, { headers: authHeader() });
+      if (!r.ok) throw new Error();
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'recepisses.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Échec de l\'export.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const load = () => {
     setLoading(true);
@@ -69,12 +89,21 @@ export default function AdminRecepisseStatsPage() {
             </div>
             <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">Statistiques récépissés</h1>
           </div>
-          <button
-            onClick={load}
-            className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
-          >
-            <RefreshCw size={14} /> Actualiser
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportCsv}
+              disabled={exporting}
+              className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300"
+            >
+              <Download size={14} /> {exporting ? 'Export...' : 'Exporter CSV'}
+            </button>
+            <button
+              onClick={load}
+              className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
+            >
+              <RefreshCw size={14} /> Actualiser
+            </button>
+          </div>
         </div>
       </div>
 

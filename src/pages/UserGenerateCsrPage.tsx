@@ -33,6 +33,7 @@ export default function UserGenerateCsrPage() {
   const [country, setCountry] = useState<string>('');
   const [emailAddr, setEmailAddr] = useState<string>('');
   const [csrModeChoice, setCsrModeChoice] = useState<'paste' | 'upload' | 'generateLater'>('paste');
+  const [cguAccepted, setCguAccepted] = useState(false);
   const [csrText, setCsrText] = useState<string>('');
   const [csrFile, setCsrFile] = useState<File | null>(null);
   const [aiModel, setAiModel] = useState<tmImage.CustomMobileNet | null>(null);
@@ -579,6 +580,23 @@ export default function UserGenerateCsrPage() {
         </div>
       )}
 
+      {step === lastStep && (
+        <div className="flex items-start gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-900">
+          <input
+            id="cgu"
+            type="checkbox"
+            checked={cguAccepted}
+            onChange={(e) => setCguAccepted(e.target.checked)}
+            className="mt-0.5 h-4 w-4 cursor-pointer rounded border-gray-300 accent-primary-600"
+          />
+          <label htmlFor="cgu" className="cursor-pointer text-sm text-neutral-600 dark:text-neutral-400">
+            J'ai lu et j'accepte les{' '}
+            <span className="font-semibold text-primary-700 dark:text-primary-400">Conditions Générales d'Utilisation</span>{' '}
+            et la <span className="font-semibold text-primary-700 dark:text-primary-400">Politique de Confidentialité</span> de la plateforme ANTIC PKI.
+          </label>
+        </div>
+      )}
+
       <div className="flex flex-wrap justify-end gap-3">
         <button className="rounded-lg border-2 border-primary-700 px-6 py-3 text-primary-700 dark:border-primary-300 dark:text-primary-300" onClick={() => navigate('/dashboard')}>
           Annuler
@@ -601,7 +619,11 @@ export default function UserGenerateCsrPage() {
             Suivant
           </button>
         ) : (
-          <button className="rounded-lg bg-primary-800 px-6 py-3 font-semibold text-white" onClick={onSubmit} disabled={submitting}>
+          <button
+            className="rounded-lg bg-primary-800 px-6 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={onSubmit}
+            disabled={submitting || !cguAccepted}
+          >
             {submitting ? 'Envoi...' : isCsrMode ? 'Soumettre le CSR' : 'Soumettre pour verification'}
           </button>
         )}

@@ -57,7 +57,8 @@ export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const isAdminLike = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+  const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'AE_CENTRALE', 'ADMIN_AEL', 'AEL'];
+  const isAdminLike = adminRoles.includes(user?.role ?? '');
   const links = isAdminLike ? adminLinks : userLinks;
 
   useEffect(() => {
@@ -129,6 +130,27 @@ export default function Sidebar() {
               <UserCog size={14} /> ADMINISTRATEUR
             </div>
             <div className="mt-0.5 text-xs text-red-600 dark:text-red-300/80">{user?.email}</div>
+          </div>
+        ) : user?.role === 'AE_CENTRALE' ? (
+          <div className="mb-6 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-center dark:border-orange-900/60 dark:bg-orange-950/40">
+            <div className="flex items-center justify-center gap-2 text-xs font-bold text-orange-700 dark:text-orange-300">
+              <UserCog size={14} /> AE CENTRALE
+            </div>
+            <div className="mt-0.5 text-xs text-orange-600 dark:text-orange-300/80">{user?.email}</div>
+          </div>
+        ) : user?.role === 'ADMIN_AEL' ? (
+          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center dark:border-amber-900/60 dark:bg-amber-950/40">
+            <div className="flex items-center justify-center gap-2 text-xs font-bold text-amber-700 dark:text-amber-300">
+              <UserCog size={14} /> ADMIN AEL
+            </div>
+            <div className="mt-0.5 text-xs text-amber-600 dark:text-amber-300/80">{user?.email}</div>
+          </div>
+        ) : user?.role === 'AEL' ? (
+          <div className="mb-6 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-center dark:border-yellow-900/60 dark:bg-yellow-950/40">
+            <div className="flex items-center justify-center gap-2 text-xs font-bold text-yellow-700 dark:text-yellow-300">
+              <UserCog size={14} /> AEL
+            </div>
+            <div className="mt-0.5 text-xs text-yellow-600 dark:text-yellow-300/80">{user?.email}</div>
           </div>
         ) : (
           <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-center dark:border-blue-900/60 dark:bg-blue-950/40">
