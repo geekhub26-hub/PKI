@@ -72,9 +72,8 @@ export default function UserRecepisses() {
     }
   };
 
-  const valides   = recepisses.filter((r) => r.statut === 'VALIDE');
-  const expires   = recepisses.filter((r) => r.statut === 'EXPIRE');
-  const autres    = recepisses.filter((r) => !['VALIDE', 'EXPIRE'].includes(r.statut));
+  const valides = recepisses.filter((r) => r.statut === 'VALIDE');
+  const expires = recepisses.filter((r) => r.statut === 'EXPIRE');
 
   if (loading) {
     return <div className="py-10 text-center text-neutral-500 dark:text-neutral-400">Chargement...</div>;
