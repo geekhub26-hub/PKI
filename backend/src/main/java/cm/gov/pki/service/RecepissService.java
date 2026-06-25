@@ -18,7 +18,7 @@ import com.lowagie.text.DocumentException;
 import com.lowagie.text.Element;
 import com.lowagie.text.Font;
 import com.lowagie.text.Image;
-import com.lowagie.text.LineSeparator;
+import com.lowagie.text.pdf.draw.LineSeparator;
 import com.lowagie.text.PageSize;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.Phrase;
@@ -250,7 +250,7 @@ public class RecepissService {
         // Régénère le PDF à la volée si le fichier n'existe plus
         try {
             return buildPdf(rec);
-        } catch (DocumentException e) {
+        } catch (DocumentException | WriterException e) {
             throw new IOException("Impossible de générer le PDF", e);
         }
     }
