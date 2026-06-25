@@ -77,6 +77,11 @@ public class RecepissController {
         }
     }
 
+    @GetMapping("/api/admin/recepisses/stats")
+    public ResponseEntity<Map<String, Object>> stats() {
+        return ResponseEntity.ok(recepissService.getStats());
+    }
+
     @GetMapping("/api/admin/recepisses")
     public ResponseEntity<List<Map<String, Object>>> listerTous() {
         List<Map<String, Object>> dtos = recepissService.listerTous().stream()

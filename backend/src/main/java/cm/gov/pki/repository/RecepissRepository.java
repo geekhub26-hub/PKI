@@ -26,4 +26,7 @@ public interface RecepissRepository extends JpaRepository<Recepisse, UUID> {
     List<Recepisse> findExpiredToUpdate(LocalDateTime now);
 
     Optional<Recepisse> findByCertificateRequestId(UUID requestId);
+
+    @Query("SELECT r FROM Recepisse r WHERE r.statut = 'VALIDE' AND r.dateExpiration >= :debut AND r.dateExpiration < :fin")
+    List<Recepisse> findExpiringBetween(LocalDateTime debut, LocalDateTime fin);
 }

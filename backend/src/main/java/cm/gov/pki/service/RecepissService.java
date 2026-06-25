@@ -268,6 +268,91 @@ public class RecepissService {
         if (!expired.isEmpty()) log.info("{} récépissé(s) marqué(s) EXPIRE", expired.size());
     }
 
+    /** Rappels email quotidiens J-15, J-7, J-1 avant expiration (chaque matin à 8h). */
+    @Scheduled(cron = "0 0 8 * * *")
+    public void envoyerRappelsExpiration() {
+        LocalDateTime now = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0).withNano(0);
+        int[] joursAlerte = {15, 7, 1};
+        for (int j : joursAlerte) {
+            LocalDateTime debut = now.plusDays(j);
+            LocalDateTime fin   = debut.plusDays(1);
+            List<Recepisse> aRappeler = recepissRepository.findExpiringBetween(debut, fin);
+            for (Recepisse rec : aRappeler) {
+                User dem = rec.getDemandeur();
+                if (dem == null || dem.getEmail() == null) continue;
+                String sujet = "Récépissé " + rec.getNumero() + " — expiration dans " + j + " jour(s)";
+                String corps = "Bonjour " + rec.getNomComplet() + ",\n\n"
+                        + "Votre récépissé électronique " + rec.getNumero()
+                        + " expire le " + rec.getDateExpiration().format(DATE_FMT) + ".\n"
+                        + "Merci de contacter un administrateur pour le renouveler avant cette date.\n\n"
+                        + "Cordialement,\nL'équipe ANTIC";
+                try {
+                    emailService.sendSimpleEmail(dem.getEmail(), sujet, corps);
+                    log.info("Rappel J-{} envoyé pour {} à {}", j, rec.getNumero(), dem.getEmail());
+                } catch (Exception e) {
+                    log.warn("Impossible d'envoyer le rappel J-{} pour {} : {}", j, rec.getNumero(), e.getMessage());
+                }
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // Stats
+    // ─────────────────────────────────────────────
+
+    public Map<String, Object> getStats() {
+        List<Recepisse> all = recepissRepository.findAll();
+        LocalDateTime now = LocalDateTime.now();
+
+        // Actualise les statuts expirés en mémoire (sans transaction)
+        all.forEach(r -> {
+            if ("VALIDE".equals(r.getStatut()) && r.getDateExpiration().isBefore(now)) {
+                r.setStatut("EXPIRE");
+            }
+        });
+
+        long total = all.size();
+
+        Map<String, Long> parStatut = new LinkedHashMap<>();
+        parStatut.put("VALIDE",   0L);
+        parStatut.put("EXPIRE",   0L);
+        parStatut.put("ANNULE",   0L);
+        parStatut.put("REMPLACE", 0L);
+        all.forEach(r -> parStatut.merge(r.getStatut(), 1L, Long::sum));
+
+        long remplace  = parStatut.get("REMPLACE");
+        long expire    = parStatut.get("EXPIRE");
+        double tauxRegen = (remplace + expire) > 0
+                ? Math.round(remplace * 1000.0 / (remplace + expire)) / 10.0
+                : 0.0;
+
+        java.time.YearMonth moisCourant = java.time.YearMonth.now();
+        long totalCeMois = all.stream()
+                .filter(r -> java.time.YearMonth.from(r.getDateGeneration()).equals(moisCourant))
+                .count();
+        long totalAujourdhui = all.stream()
+                .filter(r -> r.getDateGeneration().toLocalDate().equals(now.toLocalDate()))
+                .count();
+
+        List<Map<String, Object>> volumesMois = new ArrayList<>();
+        for (int i = 5; i >= 0; i--) {
+            java.time.YearMonth m = moisCourant.minusMonths(i);
+            long count = all.stream()
+                    .filter(r -> java.time.YearMonth.from(r.getDateGeneration()).equals(m))
+                    .count();
+            volumesMois.add(Map.of("mois", m.toString(), "count", count));
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("total",           total);
+        result.put("parStatut",       parStatut);
+        result.put("tauxRegen",       tauxRegen);
+        result.put("totalCeMois",     totalCeMois);
+        result.put("totalAujourdhui", totalAujourdhui);
+        result.put("volumesMois",     volumesMois);
+        return result;
+    }
+
     // ─────────────────────────────────────────────
     // Génération du numéro unique
     // ─────────────────────────────────────────────

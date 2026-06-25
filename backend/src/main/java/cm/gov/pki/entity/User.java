@@ -143,7 +143,7 @@ public class User {
 	}
 
 	public enum UserRole {
-		ADMIN, USER
+		ADMIN, USER, SUPER_ADMIN
 	}
 
 	public static Builder builder() { return new Builder(); }
@@ -195,6 +195,10 @@ public class User {
 	}
 
 	public boolean isAdmin() {
-		return role == UserRole.ADMIN;
+		return role == UserRole.ADMIN || role == UserRole.SUPER_ADMIN;
+	}
+
+	public boolean isSuperAdmin() {
+		return role == UserRole.SUPER_ADMIN;
 	}
 }

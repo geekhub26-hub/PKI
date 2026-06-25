@@ -31,6 +31,18 @@ public class AdminBootstrapService implements ApplicationRunner {
     @Value("${pki.bootstrap.admin.last-name:Systeme}")
     private String adminLastName;
 
+    @Value("${pki.bootstrap.superadmin.email:}")
+    private String superAdminEmail;
+
+    @Value("${pki.bootstrap.superadmin.password:}")
+    private String superAdminPassword;
+
+    @Value("${pki.bootstrap.superadmin.first-name:SuperAdmin}")
+    private String superAdminFirstName;
+
+    @Value("${pki.bootstrap.superadmin.last-name:ANTIC}")
+    private String superAdminLastName;
+
     public AdminBootstrapService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -66,6 +78,28 @@ public class AdminBootstrapService implements ApplicationRunner {
 
         userRepository.save(admin);
         log.info("Bootstrap admin account created: {}", email);
+
+        // SuperAdmin bootstrap
+        if (superAdminEmail != null && !superAdminEmail.isBlank()
+                && superAdminPassword != null && !superAdminPassword.isBlank()) {
+            String saEmail = superAdminEmail.trim().toLowerCase();
+            if (!userRepository.existsByEmail(saEmail)) {
+                if (superAdminPassword.length() < 12) {
+                    throw new IllegalStateException("PKI_BOOTSTRAP_SUPERADMIN_PASSWORD must be at least 12 characters");
+                }
+                User sa = User.builder()
+                        .email(saEmail)
+                        .passwordHash(passwordEncoder.encode(superAdminPassword))
+                        .firstName(blankToDefault(superAdminFirstName, "SuperAdmin"))
+                        .lastName(blankToDefault(superAdminLastName, "ANTIC"))
+                        .role(User.UserRole.SUPER_ADMIN)
+                        .isActive(true)
+                        .emailVerified(true)
+                        .build();
+                userRepository.save(sa);
+                log.info("Bootstrap super-admin account created: {}", saEmail);
+            }
+        }
     }
 
     private static String blankToDefault(String value, String fallback) {
