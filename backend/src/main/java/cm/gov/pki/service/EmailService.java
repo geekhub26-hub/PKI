@@ -266,4 +266,17 @@ public class EmailService {
             log.error("Erreur lors de l'envoi de l'alerte expiration a {}: {}", toEmail, e.getMessage(), e);
         }
     }
+
+    public void sendSimpleEmail(String toEmail, String subject, String body) {
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(fromEmail);
+            message.setTo(toEmail);
+            message.setSubject(subject);
+            message.setText(body);
+            sendOrLog(message);
+        } catch (Exception e) {
+            log.error("Erreur envoi email simple a {}: {}", toEmail, e.getMessage());
+        }
+    }
 }
