@@ -47,9 +47,15 @@ export default function UserRecepisses() {
 
   useEffect(() => {
     fetch(`${API_BASE}/user/recepisses`, { headers: authHeader() })
-      .then((r) => r.json())
-      .then(setRecepisses)
-      .catch(() => setError('Impossible de charger vos récépissés.'))
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((data) => {
+        if (Array.isArray(data)) setRecepisses(data);
+        else throw new Error('Format de réponse inattendu');
+      })
+      .catch((e) => setError(`Impossible de charger vos récépissés. (${e.message})`))
       .finally(() => setLoading(false));
   }, []);
 

@@ -1,4 +1,4 @@
-﻿import { useEffect } from 'react';
+﻿import { useEffect, Component, ReactNode } from 'react';
 import { HashRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import { ToastProvider } from './components/Toast';
@@ -32,6 +32,30 @@ import { AdminRequestDetail, AdminRequestsList, UserRequestsPage } from './pages
 import { userService } from './services/api';
 import { useAuthStore } from './stores/authStore';
 import { useThemeStore } from './stores/themeStore';
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { crashed: boolean; msg: string }> {
+  state = { crashed: false, msg: '' };
+  static getDerivedStateFromError(e: Error) {
+    return { crashed: true, msg: e.message };
+  }
+  render() {
+    if (this.state.crashed) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <p className="text-lg font-semibold text-rose-600 dark:text-rose-400">Une erreur s'est produite.</p>
+          <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">{this.state.msg}</p>
+          <button
+            onClick={() => { this.setState({ crashed: false, msg: '' }); window.location.hash = '/dashboard'; }}
+            className="mt-4 rounded-lg border border-neutral-300 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+          >
+            Retour au tableau de bord
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function useHydrateAuth() {
   const setUser = useAuthStore((s) => s.setUser);
@@ -95,7 +119,9 @@ function App() {
                   <Sidebar />
                   <main className="flex-1 bg-neutral-50 p-4 pt-4 sm:p-6 md:p-8 dark:bg-neutral-950">
                     <TopBar />
-                    <Outlet />
+                    <ErrorBoundary>
+                      <Outlet />
+                    </ErrorBoundary>
                   </main>
                 </div>
               </ProtectedRoute>
