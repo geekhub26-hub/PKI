@@ -78,6 +78,18 @@ public class User {
 	@Column(name = "password_reset_token_expires_at")
 	private LocalDateTime passwordResetTokenExpiresAt;
 
+	@Column(name = "otp_code")
+	private String otpCode;
+
+	@Column(name = "otp_expires_at")
+	private LocalDateTime otpExpiresAt;
+
+	@Column(name = "two_fa_code")
+	private String twoFaCode;
+
+	@Column(name = "two_fa_expires_at")
+	private LocalDateTime twoFaExpiresAt;
+
 	public UUID getId() {
 		return this.id;
 	}
@@ -142,8 +154,17 @@ public class User {
 		this.passwordResetTokenExpiresAt = passwordResetTokenExpiresAt;
 	}
 
+	public String getOtpCode() { return otpCode; }
+	public void setOtpCode(String otpCode) { this.otpCode = otpCode; }
+	public LocalDateTime getOtpExpiresAt() { return otpExpiresAt; }
+	public void setOtpExpiresAt(LocalDateTime otpExpiresAt) { this.otpExpiresAt = otpExpiresAt; }
+	public String getTwoFaCode() { return twoFaCode; }
+	public void setTwoFaCode(String twoFaCode) { this.twoFaCode = twoFaCode; }
+	public LocalDateTime getTwoFaExpiresAt() { return twoFaExpiresAt; }
+	public void setTwoFaExpiresAt(LocalDateTime twoFaExpiresAt) { this.twoFaExpiresAt = twoFaExpiresAt; }
+
 	public enum UserRole {
-		ADMIN, USER, SUPER_ADMIN
+		ADMIN, USER, SUPER_ADMIN, AE_CENTRALE, ADMIN_AEL, AEL
 	}
 
 	public static Builder builder() { return new Builder(); }
@@ -195,7 +216,8 @@ public class User {
 	}
 
 	public boolean isAdmin() {
-		return role == UserRole.ADMIN || role == UserRole.SUPER_ADMIN;
+		return role == UserRole.ADMIN || role == UserRole.SUPER_ADMIN
+			|| role == UserRole.AE_CENTRALE || role == UserRole.ADMIN_AEL || role == UserRole.AEL;
 	}
 
 	public boolean isSuperAdmin() {

@@ -15,8 +15,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Date;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -52,37 +54,84 @@ public class AuthService {
      * Inscription d'un nouvel utilisateur
      */
     @Transactional
-    public AuthDTO.UserDTO register(AuthDTO.RegisterRequest request) {
-        log.info("📝 Inscription utilisateur : {}");
+    public AuthDTO.OtpRequiredResponse register(AuthDTO.RegisterRequest request) {
+        log.info("📝 Inscription utilisateur : {}", request.getEmail());
 
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new RuntimeException("Cet email est déjà utilisé");
         }
+
+        String otp = generateOtp();
 
         User user = User.builder()
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
-                .role(User.UserRole.USER)  // Par défaut USER
+                .role(User.UserRole.USER)
                 .isActive(true)
-                .emailVerified(true)  // Automatiquement vérifiéà l'inscription
+                .emailVerified(false)
                 .build();
+        user.setOtpCode(otp);
+        user.setOtpExpiresAt(LocalDateTime.now().plusMinutes(15));
 
         user = userRepository.save(user);
 
+        emailService.sendSimpleEmail(
+            user.getEmail(),
+            "Code de vérification ANTIC PKI",
+            "Bonjour " + user.getFirstName() + ",\n\n"
+            + "Votre code de vérification est : " + otp + "\n\n"
+            + "Ce code expire dans 15 minutes.\n\nCordialement,\nL'équipe ANTIC"
+        );
+
         auditService.log(user, "USER_REGISTER", "User", user.getId(), null);
+        log.info("✅ Utilisateur créé, OTP envoyé : {}", user.getEmail());
 
-        log.info("✅ Utilisateur créé : {}");
+        return new AuthDTO.OtpRequiredResponse(user.getEmail());
+    }
 
+    @Transactional
+    public AuthDTO.UserDTO verifyOtp(String email, String code) {
+        User user = userRepository.findByEmail(email.toLowerCase().trim())
+                .orElseThrow(() -> new RuntimeException("Utilisateur introuvable"));
+        if (user.getOtpCode() == null || !user.getOtpCode().equals(code)) {
+            throw new RuntimeException("Code OTP invalide");
+        }
+        if (user.getOtpExpiresAt() == null || LocalDateTime.now().isAfter(user.getOtpExpiresAt())) {
+            throw new RuntimeException("Code OTP expiré");
+        }
+        user.setEmailVerified(true);
+        user.setOtpCode(null);
+        user.setOtpExpiresAt(null);
+        userRepository.save(user);
+        log.info("✅ Email vérifié par OTP : {}", email);
         return mapToDTO(user);
+    }
+
+    @Transactional
+    public void resendOtp(String email) {
+        User user = userRepository.findByEmail(email.toLowerCase().trim())
+                .orElseThrow(() -> new RuntimeException("Utilisateur introuvable"));
+        if (Boolean.TRUE.equals(user.getEmailVerified())) {
+            throw new RuntimeException("Email déjà vérifié");
+        }
+        String otp = generateOtp();
+        user.setOtpCode(otp);
+        user.setOtpExpiresAt(LocalDateTime.now().plusMinutes(15));
+        userRepository.save(user);
+        emailService.sendSimpleEmail(
+            user.getEmail(),
+            "Nouveau code de vérification ANTIC PKI",
+            "Bonjour " + user.getFirstName() + ",\n\nVotre nouveau code : " + otp + "\n\nExpire dans 15 min.\n\nANTIC"
+        );
     }
 
     /**
      * Connexion utilisateur
      */
     @Transactional
-    public AuthDTO.JwtResponse login(AuthDTO.LoginRequest request) {
+    public Object login(AuthDTO.LoginRequest request) {
         log.info("🔑 Tentative de connexion : {}");
 
         User user = userRepository.findByEmail(request.getEmail())
@@ -111,16 +160,69 @@ public class AuthService {
         updateLastLoginWithRetry(user.getId(), loginAt);
         user.setLastLogin(loginAt);
 
+        // 2FA pour les rôles admin
+        if (user.isAdmin()) {
+            String code = generateOtp();
+            user.setTwoFaCode(code);
+            user.setTwoFaExpiresAt(LocalDateTime.now().plusMinutes(10));
+            userRepository.save(user);
+            emailService.sendSimpleEmail(
+                user.getEmail(),
+                "Code de connexion ANTIC PKI (2FA)",
+                "Bonjour " + user.getFirstName() + ",\n\n"
+                + "Votre code de connexion : " + code + "\n\n"
+                + "Ce code expire dans 10 minutes.\n\nANTIC"
+            );
+            String pendingToken = generatePendingToken(user);
+            log.info("2FA envoyé à l'admin : {}", user.getEmail());
+            return new AuthDTO.TwoFaRequiredResponse(pendingToken);
+        }
+
         auditService.log(user, "USER_LOGIN", "User", user.getId(), null);
 
         String accessToken = generateAccessToken(user);
         String refreshToken = generateRefreshToken(user);
 
-        log.info("✅ Connexion réussie : {}");
+        log.info("✅ Connexion réussie : {}", user.getEmail());
 
         AuthDTO.JwtResponse jwt = new AuthDTO.JwtResponse();
         jwt.setAccessToken(accessToken);
         jwt.setRefreshToken(refreshToken);
+        jwt.setTokenType("Bearer");
+        jwt.setExpiresIn(jwtExpiration);
+        jwt.setUser(mapToDTO(user));
+        return jwt;
+    }
+
+    @Transactional
+    public AuthDTO.JwtResponse verify2Fa(String pendingToken, String code) {
+        Claims claims;
+        try {
+            claims = validateToken(pendingToken);
+        } catch (Exception e) {
+            throw new RuntimeException("Session 2FA invalide ou expirée");
+        }
+        if (!"2FA_PENDING".equals(claims.get("type"))) {
+            throw new RuntimeException("Token invalide");
+        }
+        UUID userId = UUID.fromString(claims.getSubject());
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Utilisateur introuvable"));
+        if (user.getTwoFaCode() == null || !user.getTwoFaCode().equals(code)) {
+            throw new RuntimeException("Code 2FA invalide");
+        }
+        if (user.getTwoFaExpiresAt() == null || LocalDateTime.now().isAfter(user.getTwoFaExpiresAt())) {
+            throw new RuntimeException("Code 2FA expiré");
+        }
+        user.setTwoFaCode(null);
+        user.setTwoFaExpiresAt(null);
+        LocalDateTime now = LocalDateTime.now();
+        user.setLastLogin(now);
+        userRepository.save(user);
+        auditService.log(user, "USER_LOGIN", "User", user.getId(), Map.of("method", "2FA"));
+        AuthDTO.JwtResponse jwt = new AuthDTO.JwtResponse();
+        jwt.setAccessToken(generateAccessToken(user));
+        jwt.setRefreshToken(generateRefreshToken(user));
         jwt.setTokenType("Bearer");
         jwt.setExpiresIn(jwtExpiration);
         jwt.setUser(mapToDTO(user));
@@ -289,6 +391,21 @@ public class AuthService {
         emailService.sendPasswordResetConfirmationEmail(user.getEmail(), user.getFirstName());
 
         log.info("Mot de passe réinitialisé avec succès pour: {}", user.getEmail());
+    }
+
+    private String generateOtp() {
+        return String.format("%06d", new SecureRandom().nextInt(1_000_000));
+    }
+
+    private String generatePendingToken(User user) {
+        Date now = new Date();
+        return Jwts.builder()
+                .subject(user.getId().toString())
+                .claim("type", "2FA_PENDING")
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + 10 * 60 * 1000L))
+                .signWith(getSigningKey())
+                .compact();
     }
 
     /**

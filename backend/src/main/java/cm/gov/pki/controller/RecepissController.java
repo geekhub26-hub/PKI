@@ -82,6 +82,15 @@ public class RecepissController {
         return ResponseEntity.ok(recepissService.getStats());
     }
 
+    @GetMapping("/api/admin/recepisses/export")
+    public ResponseEntity<byte[]> exportCsv() {
+        byte[] csv = recepissService.exportCsv();
+        return ResponseEntity.ok()
+                .header("Content-Type", "text/csv; charset=UTF-8")
+                .header("Content-Disposition", "attachment; filename=\"recepisses.csv\"")
+                .body(csv);
+    }
+
     @GetMapping("/api/admin/recepisses")
     public ResponseEntity<List<Map<String, Object>>> listerTous() {
         List<Map<String, Object>> dtos = recepissService.listerTous().stream()

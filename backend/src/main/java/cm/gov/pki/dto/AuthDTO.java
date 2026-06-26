@@ -147,4 +147,42 @@ public class AuthDTO {
         public String getRefreshToken() { return refreshToken; }
         public void setRefreshToken(String refreshToken) { this.refreshToken = refreshToken; }
     }
+
+    /** Réponse après inscription : OTP requis pour valider l'email. */
+    public static class OtpRequiredResponse {
+        private String status = "OTP_REQUIRED";
+        private String email;
+        public OtpRequiredResponse(String email) { this.email = email; }
+        public String getStatus() { return status; }
+        public String getEmail() { return email; }
+    }
+
+    /** Vérification OTP (inscription ou 2FA). */
+    public static class OtpVerifyRequest {
+        private String email;
+        private String code;
+        public String getEmail() { return email; }
+        public void setEmail(String email) { this.email = email; }
+        public String getCode() { return code; }
+        public void setCode(String code) { this.code = code; }
+    }
+
+    /** Réponse après login admin : 2FA requis. */
+    public static class TwoFaRequiredResponse {
+        private String status = "2FA_REQUIRED";
+        private String pendingToken;
+        public TwoFaRequiredResponse(String pendingToken) { this.pendingToken = pendingToken; }
+        public String getStatus() { return status; }
+        public String getPendingToken() { return pendingToken; }
+    }
+
+    /** Vérification 2FA admin. */
+    public static class TwoFaVerifyRequest {
+        private String pendingToken;
+        private String code;
+        public String getPendingToken() { return pendingToken; }
+        public void setPendingToken(String pendingToken) { this.pendingToken = pendingToken; }
+        public String getCode() { return code; }
+        public void setCode(String code) { this.code = code; }
+    }
 }

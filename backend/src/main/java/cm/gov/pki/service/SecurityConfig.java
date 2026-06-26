@@ -51,8 +51,8 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/superadmin/**").hasRole("SUPER_ADMIN")
-                        .requestMatchers("/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                        .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers("/admin/**").hasAnyRole("ADMIN","SUPER_ADMIN","AE_CENTRALE","ADMIN_AEL","AEL")
+                        .requestMatchers("/api/admin/**").hasAnyRole("ADMIN","SUPER_ADMIN","AE_CENTRALE","ADMIN_AEL","AEL")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(new JwtAuthenticationFilter(authService), UsernamePasswordAuthenticationFilter.class);

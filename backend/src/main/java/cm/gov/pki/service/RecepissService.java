@@ -300,6 +300,30 @@ public class RecepissService {
     // Stats
     // ─────────────────────────────────────────────
 
+    public byte[] exportCsv() {
+        List<Recepisse> all = recepissRepository.findAllByOrderByDateGenerationDesc();
+        all.forEach(this::refreshStatutSiExpire);
+        StringBuilder sb = new StringBuilder();
+        sb.append("Numéro,Nom complet,Type certificat,Statut,Date génération,Date expiration,Hash SHA-256\n");
+        for (Recepisse r : all) {
+            sb.append(csv(r.getNumero())).append(',')
+              .append(csv(r.getNomComplet())).append(',')
+              .append(csv(r.getTypeCertificat())).append(',')
+              .append(csv(r.getStatut())).append(',')
+              .append(csv(r.getDateGeneration().format(DATE_FMT))).append(',')
+              .append(csv(r.getDateExpiration().format(DATE_FMT))).append(',')
+              .append(csv(r.getHashSha256())).append('\n');
+        }
+        return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private static String csv(String v) {
+        if (v == null) return "";
+        if (v.contains(",") || v.contains("\"") || v.contains("\n"))
+            return "\"" + v.replace("\"", "\"\"") + "\"";
+        return v;
+    }
+
     public Map<String, Object> getStats() {
         List<Recepisse> all = recepissRepository.findAll();
         LocalDateTime now = LocalDateTime.now();
