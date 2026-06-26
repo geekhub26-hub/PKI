@@ -267,16 +267,17 @@ public class EmailService {
         }
     }
 
-    public void sendSimpleEmail(String toEmail, String subject, String body) {
+    public boolean sendSimpleEmail(String toEmail, String subject, String body) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromEmail);
             message.setTo(toEmail);
             message.setSubject(subject);
             message.setText(body);
-            sendOrLog(message);
+            return sendOrLog(message);
         } catch (Exception e) {
             log.error("Erreur envoi email simple a {}: {}", toEmail, e.getMessage());
+            return false;
         }
     }
 }

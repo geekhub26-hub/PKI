@@ -166,13 +166,17 @@ public class AuthService {
             user.setTwoFaCode(code);
             user.setTwoFaExpiresAt(LocalDateTime.now().plusMinutes(10));
             userRepository.save(user);
-            emailService.sendSimpleEmail(
+            boolean sent = emailService.sendSimpleEmail(
                 user.getEmail(),
                 "Code de connexion ANTIC PKI (2FA)",
                 "Bonjour " + user.getFirstName() + ",\n\n"
-                + "Votre code de connexion : " + code + "\n\n"
-                + "Ce code expire dans 10 minutes.\n\nANTIC"
+                + "Votre code de connexion à 6 chiffres : " + code + "\n\n"
+                + "Ce code expire dans 10 minutes.\n\n"
+                + "Si vous n'avez pas tenté de vous connecter, ignorez ce message.\n\nANTIC"
             );
+            if (!sent) {
+                throw new RuntimeException("Impossible d'envoyer le code 2FA par email. Vérifiez la configuration SMTP du serveur.");
+            }
             String pendingToken = generatePendingToken(user);
             log.info("2FA envoyé à l'admin : {}", user.getEmail());
             return new AuthDTO.TwoFaRequiredResponse(pendingToken);
