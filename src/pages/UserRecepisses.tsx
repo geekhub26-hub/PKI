@@ -44,6 +44,7 @@ export default function UserRecepisses() {
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [signedDl, setSignedDl] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/user/recepisses`, { headers: authHeader() })
@@ -75,6 +76,25 @@ export default function UserRecepisses() {
       alert('Téléchargement impossible.');
     } finally {
       setDownloading(null);
+    }
+  };
+
+  const downloadSigned = async (rec: Recepisse) => {
+    setSignedDl(rec.id);
+    try {
+      const res = await fetch(`${API_BASE}/user/recepisses/${rec.id}/download/signed`, { headers: authHeader() });
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `${rec.numero}-signe.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Téléchargement du PDF signé impossible. Une AC active est requise.');
+    } finally {
+      setSignedDl(null);
     }
   };
 
@@ -180,6 +200,15 @@ export default function UserRecepisses() {
                     >
                       {downloading === rec.id ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
                       Télécharger PDF
+                    </button>
+                    <button
+                      onClick={() => downloadSigned(rec)}
+                      disabled={signedDl === rec.id}
+                      title="PDF avec signature numérique X.509 de l'AC"
+                      className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-400 dark:hover:bg-emerald-900/40"
+                    >
+                      {signedDl === rec.id ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
+                      PDF signé X.509
                     </button>
                     <a
                       href={`/#/verify?numero=${rec.numero}`}
