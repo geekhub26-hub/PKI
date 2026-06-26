@@ -111,6 +111,19 @@ public class RecepissController {
         }
     }
 
+    @GetMapping("/api/admin/recepisses/{id}/download/signed")
+    public ResponseEntity<byte[]> downloadSignedAdmin(@PathVariable UUID id) {
+        try {
+            byte[] pdf = recepissService.getSignedPdfBytes(id);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"recepisse-signe-" + id + ".pdf\"")
+                    .body(pdf);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).build();
+        }
+    }
+
     // ─────────────────────────────────────────────
     // Usager
     // ─────────────────────────────────────────────
@@ -133,6 +146,19 @@ public class RecepissController {
                     .body(pdf);
         } catch (Exception e) {
             return ResponseEntity.notFound().build();
+        }
+    }
+
+    @GetMapping("/api/user/recepisses/{id}/download/signed")
+    public ResponseEntity<byte[]> downloadSigned(@PathVariable UUID id, Authentication auth) {
+        try {
+            byte[] pdf = recepissService.getSignedPdfBytes(id);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"recepisse-signe.pdf\"")
+                    .body(pdf);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).build();
         }
     }
 

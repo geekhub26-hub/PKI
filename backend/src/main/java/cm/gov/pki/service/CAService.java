@@ -669,6 +669,32 @@ public class CAService {
 
     
 
+    // ─── Signing material ─────────────────────────────────────────────────────
+
+    public record CaSigningMaterial(PrivateKey privateKey, X509Certificate[] chain) {}
+
+    public Optional<CaSigningMaterial> getActiveSigningMaterial() {
+        Optional<CAConfiguration> caOpt = caConfigurationRepository.findFirstByIsActiveTrueOrderByCreatedAtDesc();
+        if (caOpt.isEmpty()) return Optional.empty();
+        CAConfiguration ca = caOpt.get();
+        try {
+            PrivateKey key = loadPrivateKeyForCA(ca);
+            if (key == null) return Optional.empty();
+            Path certPath = Path.of(ca.caCertPath);
+            X509Certificate cert;
+            try (PEMParser p = new PEMParser(Files.newBufferedReader(certPath))) {
+                X509CertificateHolder holder = (X509CertificateHolder) p.readObject();
+                cert = new JcaX509CertificateConverter()
+                        .setProvider(BouncyCastleProvider.PROVIDER_NAME)
+                        .getCertificate(holder);
+            }
+            return Optional.of(new CaSigningMaterial(key, new X509Certificate[]{cert}));
+        } catch (Exception e) {
+            log.warn("Cannot load CA signing material: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
     // Charge la clÃ© privÃ©e pour une CA : tente le PEM puis le PKCS12 keystore (alias 'ca-key').
     private PrivateKey loadPrivateKeyForCA(CAConfiguration ca) {
         try {

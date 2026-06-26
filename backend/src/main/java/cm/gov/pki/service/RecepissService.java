@@ -60,6 +60,7 @@ public class RecepissService {
     private final ParametreRepository parametreRepository;
     private final AuditService auditService;
     private final EmailService emailService;
+    private final PdfSigningService pdfSigningService;
 
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendUrl;
@@ -69,13 +70,15 @@ public class RecepissService {
                            UserRepository userRepository,
                            ParametreRepository parametreRepository,
                            AuditService auditService,
-                           EmailService emailService) {
+                           EmailService emailService,
+                           PdfSigningService pdfSigningService) {
         this.recepissRepository  = recepissRepository;
         this.requestRepository   = requestRepository;
         this.userRepository      = userRepository;
         this.parametreRepository = parametreRepository;
         this.auditService        = auditService;
         this.emailService        = emailService;
+        this.pdfSigningService   = pdfSigningService;
     }
 
     // ─────────────────────────────────────────────
@@ -253,6 +256,10 @@ public class RecepissService {
         } catch (DocumentException | WriterException e) {
             throw new IOException("Impossible de générer le PDF", e);
         }
+    }
+
+    public byte[] getSignedPdfBytes(UUID recepissId) throws Exception {
+        return pdfSigningService.sign(getPdfBytes(recepissId));
     }
 
     // ─────────────────────────────────────────────
