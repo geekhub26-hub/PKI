@@ -65,7 +65,8 @@ pki:
   
   # Email
   email:
-    debug-mode: ${PKI_EMAIL_DEBUG_MODE:false}  # En dev, afficher les emails dans les logs
+    debug-mode: ${PKI_EMAIL_DEBUG_MODE:false}
+    brevo-api-key: ${BREVO_API_KEY:}
 
   # Bootstrap du premier administrateur (laisser vide pour desactiver)
   bootstrap:

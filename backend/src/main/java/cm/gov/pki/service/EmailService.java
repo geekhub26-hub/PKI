@@ -7,6 +7,10 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.UUID;
 
 /**
@@ -28,6 +32,9 @@ public class EmailService {
     @Value("${pki.email.debug-mode:false}")
     private boolean debugMode;
 
+    @Value("${pki.email.brevo-api-key:}")
+    private String brevoApiKey;
+
     public EmailService(JavaMailSender mailSender) {
         this.mailSender = mailSender;
     }
@@ -45,32 +52,70 @@ public class EmailService {
      * Envoie ou affiche un email en mode debug
      */
     private boolean sendOrLog(SimpleMailMessage message) {
+        if (debugMode) {
+            log.info("\n=== MODE DEBUG - EMAIL ===\nDe: {}\nA: {}\nSujet: {}\n---\n{}\n=========================",
+                message.getFrom(),
+                message.getTo() != null ? String.join(", ", message.getTo()) : "",
+                message.getSubject(),
+                message.getText());
+            return true;
+        }
+
+        // 1. Brevo HTTP API — contourne les blocages SMTP (port 587 bloqué sur Render)
+        if (brevoApiKey != null && !brevoApiKey.isBlank()) {
+            String to = message.getTo() != null && message.getTo().length > 0 ? message.getTo()[0] : "";
+            return sendViaBrevo(to, message.getSubject(), message.getText());
+        }
+
+        // 2. Fallback SMTP classique
         try {
-            if (debugMode) {
-                log.info("\n" +
-                    "â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n" +
-                    "â•‘                    ðŸ“§ MODE DEBUG - EMAIL                       â•‘\n" +
-                    "â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n" +
-                    "De: {}\n" +
-                    "Ã€: {}\n" +
-                    "Sujet: {}\n" +
-                    "â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€\n" +
-                    "{}\n" +
-                    "â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€",
-                    message.getFrom(),
-                    String.join(", ", message.getTo()),
-                    message.getSubject(),
-                    message.getText()
-                );
-                return true;
-            } else {
-                mailSender.send(message);
-                return true;
-            }
+            mailSender.send(message);
+            return true;
         } catch (Exception e) {
-            log.error("Erreur lors de l'envoi/affichage de l'email", e);
+            log.error("Erreur SMTP ({}). Configurez BREVO_API_KEY pour contourner les blocages SMTP.", e.getMessage());
             return false;
         }
+    }
+
+    private boolean sendViaBrevo(String to, String subject, String text) {
+        try {
+            String json = "{"
+                + "\"sender\":{\"name\":\"PKI Souverain\",\"email\":\"" + escapeJson(fromEmail) + "\"},"
+                + "\"to\":[{\"email\":\"" + escapeJson(to) + "\"}],"
+                + "\"subject\":\"" + escapeJson(subject) + "\"," 
+                + "\"textContent\":\"" + escapeJson(text) + "\""
+                + "}";
+
+            java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.brevo.com/v3/smtp/email"))
+                    .header("accept", "application/json")
+                    .header("api-key", brevoApiKey)
+                    .header("content-type", "application/json")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(json))
+                    .build();
+
+            java.net.http.HttpResponse<String> response = client.send(request,
+                    java.net.http.HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                log.info("Email envoyé via Brevo à {}", to);
+                return true;
+            }
+            log.error("Brevo API erreur {} : {}", response.statusCode(), response.body());
+            return false;
+        } catch (Exception e) {
+            log.error("Erreur Brevo : {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private static String escapeJson(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 
     /**
