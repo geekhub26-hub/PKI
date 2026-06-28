@@ -270,4 +270,72 @@ public class IdentityDocumentAiService {
     }
 
     public record ValidationResult(boolean accepted, double confidence, String message) {}
+
+    // ─── Face comparison ──────────────────────────────────────────────────────
+
+    public record FaceComparisonResult(boolean match, double similarity, String message) {}
+
+    /**
+     * Compare le visage du selfie avec le visage sur la pièce d'identité.
+     * Appelle {localServiceBase}/compare-faces ; en cas d'indisponibilité,
+     * retourne un résultat accepté en mode souple (strictMode=false).
+     */
+    public FaceComparisonResult compareFaces(MultipartFile document, MultipartFile selfie) {
+        try {
+            String compareUrl = deriveCompareUrl(localUrl);
+            if (compareUrl == null) throw new IllegalStateException("URL comparaison introuvable");
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+            if (localApiKey != null && !localApiKey.isBlank()) {
+                headers.add("X-API-Key", localApiKey);
+            }
+
+            MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+            body.add("document", new ByteArrayResource(document.getBytes()) {
+                @Override public String getFilename() {
+                    String n = document.getOriginalFilename();
+                    return (n == null || n.isBlank()) ? "document.bin" : n;
+                }
+            });
+            body.add("selfie", new ByteArrayResource(selfie.getBytes()) {
+                @Override public String getFilename() { return "selfie.jpg"; }
+            });
+
+            HttpEntity<MultiValueMap<String, Object>> entity = new HttpEntity<>(body, headers);
+            ResponseEntity<String> response = restTemplate.postForEntity(compareUrl, entity, String.class);
+
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                throw new IllegalStateException("compare-faces returned " + response.getStatusCode().value());
+            }
+
+            JsonNode root = objectMapper.readTree(response.getBody());
+            boolean match = root.path("match").asBoolean(false);
+            double similarity = root.path("similarity").asDouble(0.0);
+            String message = root.path("message").asText("Résultat comparaison faciale");
+            log.info("Face comparison: match={} similarity={}", match, similarity);
+            return new FaceComparisonResult(match, similarity, message);
+
+        } catch (Exception e) {
+            log.warn("Face comparison unavailable: {}", e.getMessage());
+            if (strictMode) {
+                return new FaceComparisonResult(false, 0.0, "Comparaison faciale indisponible en mode strict");
+            }
+            return new FaceComparisonResult(true, 0.5, "Service de comparaison faciale non disponible (mode souple accepté)");
+        }
+    }
+
+    private static String deriveCompareUrl(String validateUrl) {
+        if (validateUrl == null || validateUrl.isBlank()) return null;
+        try {
+            URI uri = new URI(validateUrl);
+            String path = uri.getPath() == null ? "" : uri.getPath();
+            String comparePath = path.endsWith("/validate")
+                    ? path.substring(0, path.length() - "/validate".length()) + "/compare-faces"
+                    : "/compare-faces";
+            return new URI(uri.getScheme(), uri.getAuthority(), comparePath, null, null).toString();
+        } catch (URISyntaxException ignored) {
+            return null;
+        }
+    }
 }

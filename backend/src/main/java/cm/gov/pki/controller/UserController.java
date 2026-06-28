@@ -206,6 +206,22 @@ public class UserController {
         req.setNotes(savedDocs);
         req = certificateRequestRepository.save(req);
 
+        // Comparaison faciale selfie ↔ pièce d'identité
+        if (selfie != null && !selfie.isEmpty() && documents != null && documents.length > 0) {
+            try {
+                var faceResult = identityDocumentAiService.compareFaces(documents[0], selfie);
+                if (!faceResult.match()) {
+                    try { certificateRequestRepository.delete(req); } catch (Exception ignore) {}
+                    return ResponseEntity.status(400).body(Map.of(
+                        "error", "Le selfie ne correspond pas au visage sur la pièce d'identité. Veuillez reprendre votre selfie face à la caméra. (" + faceResult.message() + ")"
+                    ));
+                }
+                log.info("Face comparison passed for request {} (similarity={})", req.getId(), faceResult.similarity());
+            } catch (Exception e) {
+                log.warn("Face comparison error for request {}: {}", req.getId(), e.getMessage());
+            }
+        }
+
         auditService.log(user, cm.gov.pki.entity.AuditLog.Actions.REQUEST_SUBMITTED, "CertificateRequest", req.getId(), null);
 
         return ResponseEntity.ok(Map.of(
