@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import * as tmImage from '@teachablemachine/image';
+import { Camera, RefreshCw, CheckCircle } from 'lucide-react';
 import { userService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { notify } from '../utils/notify';
@@ -14,6 +15,12 @@ export default function UserGenerateCsrPage() {
   const [step, setStep] = useState<1 | 2 | 3>(() => (isCsrMode ? 3 : 1));
   const [files, setFiles] = useState<File[]>([]);
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [selfiePreviewUrl, setSelfiePreviewUrl] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +49,6 @@ export default function UserGenerateCsrPage() {
   const [aiResults, setAiResults] = useState<Record<string, { label: string; score: number; ok: boolean }>>({});
   const aiRequestIdRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const selfieInputRef = useRef<HTMLInputElement | null>(null);
   const csrFileRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
@@ -174,22 +180,56 @@ export default function UserGenerateCsrPage() {
 
   const onBrowse = () => fileInputRef.current?.click();
 
-  const onSelectSelfieFile = (f: File | null) => {
-    if (!f) {
-      setSelfieFile(null);
-      return;
+  const startCamera = async () => {
+    setCameraError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+      setCameraActive(true);
+    } catch {
+      setCameraError("Impossible d'accéder à la caméra. Vérifiez les permissions du navigateur.");
     }
-    if (!/^image\/(png|jpe?g|webp)$/.test(f.type)) {
-      setError('Le selfie doit etre une image PNG, JPG ou WEBP.');
-      return;
-    }
-    if (f.size > 10 * 1024 * 1024) {
-      setError('Le selfie est trop volumineux (>10MB).');
-      return;
-    }
-    setSelfieFile(f);
-    setError(null);
   };
+
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setCameraActive(false);
+  };
+
+  const captureSelfie = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    canvas.getContext('2d')?.drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const file = new File([blob], 'selfie.jpg', { type: 'image/jpeg' });
+      const url = URL.createObjectURL(blob);
+      if (selfiePreviewUrl) URL.revokeObjectURL(selfiePreviewUrl);
+      setSelfieFile(file);
+      setSelfiePreviewUrl(url);
+      stopCamera();
+    }, 'image/jpeg', 0.92);
+  };
+
+  const retakeSelfie = () => {
+    if (selfiePreviewUrl) URL.revokeObjectURL(selfiePreviewUrl);
+    setSelfiePreviewUrl(null);
+    setSelfieFile(null);
+    startCamera();
+  };
+
+  useEffect(() => () => {
+    stopCamera();
+    if (selfiePreviewUrl) URL.revokeObjectURL(selfiePreviewUrl);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onSelectCsrFile = (f: File | null) => {
     if (!f) {
@@ -482,29 +522,77 @@ export default function UserGenerateCsrPage() {
             </div>
           )}
 
+          {/* Webcam selfie */}
+          <canvas ref={canvasRef} className="hidden" />
           <div className="mt-6 rounded-lg border border-neutral-200 p-4 dark:border-neutral-700">
-            <div className="mb-1 font-semibold dark:text-neutral-100">Selfie du demandeur *</div>
-            <div className="mb-3 text-sm text-neutral-500 dark:text-neutral-400">Image PNG, JPG ou WEBP. Le visage doit etre bien visible.</div>
-            <input
-              ref={selfieInputRef}
-              type="file"
-              className="hidden"
-              accept="image/png,image/jpeg,image/webp"
-              onChange={(e) => onSelectSelfieFile(e.target.files ? e.target.files[0] : null)}
-            />
-            <div className="flex flex-wrap items-center gap-3">
-              <button className="rounded-lg border px-4 py-2 dark:border-neutral-700 dark:text-neutral-200" onClick={() => selfieInputRef.current?.click()}>
-                {selfieFile ? 'Remplacer le selfie' : 'Choisir un selfie'}
+            <div className="mb-1 font-semibold dark:text-neutral-100">Selfie en direct *</div>
+            <div className="mb-3 text-sm text-neutral-500 dark:text-neutral-400">
+              Prenez un selfie avec votre caméra. Votre visage sera comparé à celui de votre pièce d'identité.
+            </div>
+
+            {!cameraActive && !selfiePreviewUrl && (
+              <button
+                type="button"
+                onClick={startCamera}
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700"
+              >
+                <Camera size={16} /> Activer la caméra
               </button>
-              {selfieFile && (
-                <div className="text-sm text-neutral-700 dark:text-neutral-300">
-                  {selfieFile.name} <span className="text-xs text-neutral-400">({Math.round(selfieFile.size / 1024)} KB)</span>
-                  <button className="ml-3 text-red-600" onClick={() => setSelfieFile(null)}>
-                    Supprimer
+            )}
+
+            {cameraError && (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400">{cameraError}</p>
+            )}
+
+            {cameraActive && (
+              <div className="space-y-3">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="w-full max-w-sm rounded-xl border border-neutral-200 dark:border-neutral-700"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={captureSelfie}
+                    className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+                  >
+                    <Camera size={15} /> Prendre le selfie
+                  </button>
+                  <button
+                    type="button"
+                    onClick={stopCamera}
+                    className="rounded-lg border border-neutral-300 px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300"
+                  >
+                    Annuler
                   </button>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
+            {selfiePreviewUrl && (
+              <div className="space-y-3">
+                <div className="relative inline-block">
+                  <img
+                    src={selfiePreviewUrl}
+                    alt="Selfie capturé"
+                    className="w-full max-w-sm rounded-xl border border-neutral-200 dark:border-neutral-700"
+                  />
+                  <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">
+                    <CheckCircle size={12} /> Selfie capturé
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={retakeSelfie}
+                  className="flex items-center gap-2 rounded-lg border border-neutral-300 px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300"
+                >
+                  <RefreshCw size={14} /> Reprendre
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
