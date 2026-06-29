@@ -16,6 +16,7 @@ export default function UserGenerateCsrPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [selfiePreviewUrl, setSelfiePreviewUrl] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -198,24 +199,32 @@ export default function UserGenerateCsrPage() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setCameraActive(false);
+    setVideoReady(false);
   };
 
   const captureSelfie = () => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
-    canvas.getContext('2d')?.drawImage(video, 0, 0);
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const file = new File([blob], 'selfie.jpg', { type: 'image/jpeg' });
-      const url = URL.createObjectURL(blob);
-      if (selfiePreviewUrl) URL.revokeObjectURL(selfiePreviewUrl);
-      setSelfieFile(file);
-      setSelfiePreviewUrl(url);
-      stopCamera();
-    }, 'image/jpeg', 0.92);
+    // requestAnimationFrame garantit qu'on capture après que le navigateur a rendu un vrai frame
+    requestAnimationFrame(() => {
+      const w = video.videoWidth || 640;
+      const h = video.videoHeight || 480;
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(video, 0, 0, w, h);
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const file = new File([blob], 'selfie.jpg', { type: 'image/jpeg' });
+        const url = URL.createObjectURL(blob);
+        if (selfiePreviewUrl) URL.revokeObjectURL(selfiePreviewUrl);
+        setSelfieFile(file);
+        setSelfiePreviewUrl(url);
+        stopCamera();
+      }, 'image/jpeg', 0.92);
+    });
   };
 
   const retakeSelfie = () => {
@@ -551,15 +560,17 @@ export default function UserGenerateCsrPage() {
                   autoPlay
                   muted
                   playsInline
-                  className="w-full max-w-sm rounded-xl border border-neutral-200 dark:border-neutral-700"
+                  onCanPlay={() => setVideoReady(true)}
+                  className="w-full max-w-sm rounded-xl border border-neutral-200 dark:border-neutral-700 scale-x-[-1]"
                 />
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={captureSelfie}
-                    className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+                    disabled={!videoReady}
+                    className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Camera size={15} /> Prendre le selfie
+                    <Camera size={15} /> {videoReady ? 'Prendre le selfie' : 'Initialisation…'}
                   </button>
                   <button
                     type="button"
