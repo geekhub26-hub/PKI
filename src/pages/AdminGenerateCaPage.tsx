@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import Button from '../components/Button';
-import Input from '../components/Input';
+import { KeyRound } from 'lucide-react';
 import { adminService } from '../services/api';
 
 export default function AdminGenerateCaPage() {
@@ -82,75 +81,127 @@ export default function AdminGenerateCaPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 py-6">
-      <header className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-        <h1 className="text-h3 font-semibold text-[var(--text-1)]">Generer AC racine / intermediaire</h1>
-        <p className="mt-1 text-sm text-[var(--text-3)]">Creez la chaine de certification et suivez l'etat de l'AC active.</p>
-      </header>
-
-      <section className="mb-6 rounded-2xl border border-neutral-200 bg-white p-5 shadow dark:border-neutral-800 dark:bg-neutral-900">
-        <h2 className="mb-3 text-lg font-semibold dark:text-neutral-100">Etat CA active</h2>
-        {loadingStatus ? (
-          <div className="text-sm text-neutral-500 dark:text-neutral-400">Chargement...</div>
-        ) : status ? (
-          <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
-            <div className="dark:text-neutral-300"><span className="font-semibold">Nom:</span> {status.caName || '-'}</div>
-            <div className="dark:text-neutral-300"><span className="font-semibold">Active:</span> {String(status.isActive)}</div>
-            <div className="dark:text-neutral-300"><span className="font-semibold">Valide jusqu'au:</span> {status.validUntil || '-'}</div>
-            <div className="dark:text-neutral-300"><span className="font-semibold">Subject DN:</span> {status.subjectDN || '-'}</div>
-          </div>
-        ) : (
-          <div className="text-sm text-neutral-500 dark:text-neutral-400">Aucune CA active detectee.</div>
-        )}
-      </section>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow dark:border-neutral-800 dark:bg-neutral-900">
-          <h2 className="mb-4 text-lg font-semibold dark:text-neutral-100">Generer AC racine</h2>
-          <div className="space-y-4">
-            <Input
-              label="Nom AC racine"
-              value={rootName}
-              onChange={setRootName}
-              placeholder="PKI Souverain Root CA"
-            />
-            <Button onClick={handleGenerateRoot} loading={rootLoading}>
-              Generer AC racine
-            </Button>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow dark:border-neutral-800 dark:bg-neutral-900">
-          <h2 className="mb-4 text-lg font-semibold dark:text-neutral-100">Generer AC intermediaire</h2>
-          <div className="space-y-4">
-            <Input
-              label="Nom AC intermediaire"
-              value={intermediateName}
-              onChange={setIntermediateName}
-              placeholder="PKI Intermediate CA"
-            />
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Input
-                label="Taille cle"
-                value={keySize}
-                onChange={setKeySize}
-                placeholder="4096"
-              />
-              <Input
-                label="Validite (jours)"
-                value={validityDays}
-                onChange={setValidityDays}
-                placeholder="3650"
-              />
-            </div>
-            <Button onClick={handleGenerateIntermediate} loading={intermediateLoading} variant="secondary">
-              Generer AC intermediaire
-            </Button>
-          </div>
-        </section>
+      {/* Page header */}
+      <div className="page-header-bar flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Générer Autorité de Certification</h1>
+          <p className="mt-1 text-sm text-white/70">Créez la chaîne de certification et suivez l'état de l'AC active.</p>
+        </div>
+        <KeyRound size={32} className="text-white/80" />
       </div>
 
+      {/* CA Status card */}
+      <div className="pki-card p-5">
+        <h2 className="mb-3 text-base font-semibold text-slate-800 dark:text-slate-100">État CA active</h2>
+        {loadingStatus ? (
+          <div className="text-sm text-slate-500 dark:text-slate-400">Chargement...</div>
+        ) : status ? (
+          <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
+            <div className="text-slate-600 dark:text-slate-300">
+              <span className="font-semibold text-slate-800 dark:text-slate-100">Nom :</span> {status.caName || '-'}
+            </div>
+            <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+              <span className="font-semibold text-slate-800 dark:text-slate-100">Active :</span>
+              {status.isActive ? (
+                <span className="status-badge status-active">Active</span>
+              ) : (
+                <span className="status-badge status-pending">Inactive</span>
+              )}
+            </div>
+            <div className="text-slate-600 dark:text-slate-300">
+              <span className="font-semibold text-slate-800 dark:text-slate-100">Valide jusqu'au :</span> {status.validUntil || '-'}
+            </div>
+            <div className="text-slate-600 dark:text-slate-300">
+              <span className="font-semibold text-slate-800 dark:text-slate-100">Subject DN :</span> {status.subjectDN || '-'}
+            </div>
+          </div>
+        ) : (
+          <div className="text-sm text-slate-500 dark:text-slate-400">
+            <span className="status-badge status-pending">Aucune CA active détectée.</span>
+          </div>
+        )}
+      </div>
+
+      {/* Two-column grid */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* AC Racine */}
+        <div className="pki-card p-5">
+          <h2 className="mb-4 text-base font-semibold text-slate-800 dark:text-slate-100">AC Racine</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">
+                Nom AC racine
+              </label>
+              <input
+                className="pki-input"
+                value={rootName}
+                onChange={(e) => setRootName(e.target.value)}
+                placeholder="PKI Souverain Root CA"
+              />
+            </div>
+            <button
+              className="btn btn-green w-full"
+              onClick={handleGenerateRoot}
+              disabled={rootLoading}
+            >
+              {rootLoading ? 'Génération...' : 'Générer AC racine'}
+            </button>
+          </div>
+        </div>
+
+        {/* AC Intermédiaire */}
+        <div className="pki-card p-5">
+          <h2 className="mb-4 text-base font-semibold text-slate-800 dark:text-slate-100">AC Intermédiaire</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">
+                Nom AC intermédiaire
+              </label>
+              <input
+                className="pki-input"
+                value={intermediateName}
+                onChange={(e) => setIntermediateName(e.target.value)}
+                placeholder="PKI Intermediate CA"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">
+                  Taille clé
+                </label>
+                <input
+                  className="pki-input"
+                  value={keySize}
+                  onChange={(e) => setKeySize(e.target.value)}
+                  placeholder="4096"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">
+                  Validité (jours)
+                </label>
+                <input
+                  className="pki-input"
+                  value={validityDays}
+                  onChange={(e) => setValidityDays(e.target.value)}
+                  placeholder="3650"
+                />
+              </div>
+            </div>
+            <button
+              className="btn btn-primary w-full"
+              onClick={handleGenerateIntermediate}
+              disabled={intermediateLoading}
+            >
+              {intermediateLoading ? 'Génération...' : 'Générer AC intermédiaire'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Error banner */}
       {error && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700 dark:border-red-800/50 dark:bg-red-950/40 dark:text-red-300">
           {error}
         </div>
       )}

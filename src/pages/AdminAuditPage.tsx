@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import Button from '../components/Button';
 import { adminService } from '../services/api';
 
 const ACTIONS = [
@@ -51,71 +50,142 @@ export default function AdminAuditPage() {
     load();
   }, [page]);
 
+  function actionBadgeClass(action: string) {
+    if (action.includes('REVOKED') || action.includes('REJECTED')) return 'status-badge status-revoked';
+    if (action.includes('ISSUED') || action.includes('APPROVED') || action.includes('PUBLISHED')) return 'status-badge status-active';
+    if (action.includes('LOGIN') || action.includes('REGISTER')) return 'status-badge status-pending';
+    return 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+  }
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6 py-8">
-      <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
-        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300">
-          Audit & Traçabilité
-        </div>
-        <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">Journal d'audit</h1>
-        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+    <div className="mx-auto max-w-6xl space-y-6 py-6">
+      {/* Page header */}
+      <div className="page-header-bar">
+        <h1 className="text-2xl font-bold text-white">Journal d'audit</h1>
+        <p className="mt-1 text-sm text-white/70">
           Historique complet des actions sensibles.
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-200">Filtrer</label>
-        <select
-          value={actionFilter}
-          onChange={(e) => setActionFilter(e.target.value)}
-          className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm text-neutral-700 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
-        >
-          {ACTIONS.map((action) => (
-            <option key={action} value={action}>{action}</option>
-          ))}
-        </select>
+      {/* Filter bar */}
+      <div className="pki-card p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Filtrer :</label>
+          <select
+            value={actionFilter}
+            onChange={(e) => setActionFilter(e.target.value)}
+            className="pki-input !py-1.5 !text-sm w-auto"
+          >
+            {ACTIONS.map((action) => (
+              <option key={action} value={action}>{action}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            className="btn btn-primary !py-1.5 !px-3 !text-sm"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+          >
+            Préc
+          </button>
+          <span className="text-sm text-slate-600 dark:text-slate-400 font-medium">{page} / {totalPages}</span>
+          <button
+            className="btn btn-primary !py-1.5 !px-3 !text-sm"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+          >
+            Suiv
+          </button>
+        </div>
       </div>
 
       {error && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700 dark:border-red-800/50 dark:bg-red-950/40 dark:text-red-300">
           {error}
         </div>
       )}
 
+      {/* Audit log table */}
       {loading ? (
-        <div className="text-sm text-neutral-500 dark:text-neutral-400">Chargement...</div>
+        <div className="text-sm text-slate-500 dark:text-slate-400">Chargement...</div>
       ) : (
-        <div className="space-y-3">
-          {logs.map((log) => (
-            <div key={log.id} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">{log.action}</div>
-                <div className="text-xs text-neutral-500 dark:text-neutral-400">{log.createdAt}</div>
-              </div>
-              <div className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                {log.userEmail || 'SYSTEM'} • {log.entityType} {log.entityId || ''}
-              </div>
-              {log.details && (
-                <pre className="mt-2 rounded-lg bg-neutral-100 p-2 text-xs text-neutral-700 dark:bg-neutral-950 dark:text-neutral-300">
-                  {JSON.stringify(log.details, null, 2)}
-                </pre>
-              )}
-            </div>
-          ))}
+        <div className="pki-card overflow-hidden">
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full min-w-[700px]">
+              <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700/50">
+                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  <th className="px-5 py-3">Action</th>
+                  <th className="px-5 py-3">Utilisateur</th>
+                  <th className="px-5 py-3">Entité</th>
+                  <th className="px-5 py-3">Date</th>
+                  <th className="px-5 py-3">Détails</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                      Aucun audit disponible.
+                    </td>
+                  </tr>
+                ) : (
+                  logs.map((log) => (
+                    <tr key={log.id} className="border-t border-slate-100 dark:border-slate-700/50 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="px-5 py-3">
+                        <span className={actionBadgeClass(log.action)}>{log.action}</span>
+                      </td>
+                      <td className="px-5 py-3 text-sm text-slate-600 dark:text-slate-300">
+                        {log.userEmail || 'SYSTEM'}
+                      </td>
+                      <td className="px-5 py-3 text-xs text-slate-500 dark:text-slate-400">
+                        {log.entityType} {log.entityId || ''}
+                      </td>
+                      <td className="px-5 py-3 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                        {log.createdAt}
+                      </td>
+                      <td className="px-5 py-3">
+                        {log.details && (
+                          <pre className="bg-slate-100 dark:bg-slate-800 rounded-lg p-1.5 text-xs text-slate-600 dark:text-slate-300 max-w-xs overflow-auto">
+                            {JSON.stringify(log.details, null, 2)}
+                          </pre>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
 
-          {logs.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-neutral-300 bg-white p-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-400">
-              Aucun audit disponible.
-            </div>
-          )}
+          {/* Mobile cards */}
+          <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-700/50">
+            {logs.length === 0 ? (
+              <div className="p-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                Aucun audit disponible.
+              </div>
+            ) : (
+              logs.map((log) => (
+                <div key={log.id} className="p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className={actionBadgeClass(log.action)}>{log.action}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{log.createdAt}</span>
+                  </div>
+                  <div className="text-sm text-slate-600 dark:text-slate-300">
+                    {log.userEmail || 'SYSTEM'} • {log.entityType} {log.entityId || ''}
+                  </div>
+                  {log.details && (
+                    <pre className="bg-slate-100 dark:bg-slate-800 rounded-lg p-2 text-xs text-slate-600 dark:text-slate-300 overflow-auto">
+                      {JSON.stringify(log.details, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
-
-      <div className="flex items-center justify-between">
-        <Button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>Prec</Button>
-        <div className="text-sm text-neutral-600 dark:text-neutral-400">{page} / {totalPages}</div>
-        <Button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>Suiv</Button>
-      </div>
     </div>
   );
 }

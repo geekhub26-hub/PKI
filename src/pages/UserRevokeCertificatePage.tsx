@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import Button from '../components/Button';
 import { Certificate, userService } from '../services/api';
 
 export default function UserRevokeCertificatePage() {
@@ -22,74 +21,89 @@ export default function UserRevokeCertificatePage() {
     setMessage(null);
     try {
       await userService.revokeCertificate(id, reasons[id]);
-      setMessage('Votre certificat a ete revoque.');
+      setMessage('Votre certificat a été révoqué.');
       const refreshed = await userService.getMyCertificates();
       setCertificates(refreshed);
     } catch (e: any) {
-      setError(e?.message || 'Erreur lors de la revocation.');
+      setError(e?.message || 'Erreur lors de la révocation.');
+    }
+  }
+
+  function statusBadgeClass(s: string) {
+    switch (s) {
+      case 'ACTIVE': return 'status-badge status-active';
+      case 'REVOKED': return 'status-badge status-revoked';
+      case 'EXPIRED': return 'status-badge status-rejected';
+      default: return 'status-badge status-pending';
     }
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 py-8">
-      <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
-        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300">
-          Revocation utilisateur
-        </div>
-        <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">Revoquer un certificat</h1>
-        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
-          Si votre cle est compromise, vous pouvez revoquer un certificat actif.
+    <div className="mx-auto max-w-5xl space-y-6 py-6">
+      {/* Page header */}
+      <div className="page-header-bar">
+        <h1 className="text-2xl font-bold text-white">Révoquer un certificat</h1>
+        <p className="mt-1 text-sm text-white/70">
+          Si votre clé est compromise, vous pouvez révoquer un certificat actif.
         </p>
       </div>
 
+      {/* Banners */}
       {message && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-300">
           {message}
         </div>
       )}
       {error && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700 dark:border-red-800/50 dark:bg-red-950/40 dark:text-red-300">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="text-sm text-neutral-500 dark:text-neutral-400">Chargement...</div>
+        <div className="text-sm text-slate-500 dark:text-slate-400">Chargement...</div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {certificates.map((cert) => (
-            <div key={cert.id} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-                  {cert.subjectDN?.split(',')[0]?.replace('CN=', '') || cert.id}
+            <div key={cert.id} className="pki-card p-4 space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    {cert.subjectDN?.split(',')[0]?.replace('CN=', '') || cert.id}
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Série : {cert.serialNumber}
+                  </div>
                 </div>
-                <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-                  {cert.status}
-                </span>
+                <span className={statusBadgeClass(cert.status)}>{cert.status}</span>
               </div>
-              <div className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">Serie: {cert.serialNumber}</div>
 
               {cert.status === 'ACTIVE' ? (
-                <div className="mt-3 space-y-2">
+                <div className="space-y-2">
                   <input
                     type="text"
-                    className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
-                    placeholder="Raison de revocation (optionnel)"
+                    className="pki-input !text-xs"
+                    placeholder="Raison de révocation (optionnel)"
                     value={reasons[cert.id] || ''}
                     onChange={(e) => setReasons((prev) => ({ ...prev, [cert.id]: e.target.value }))}
                   />
-                  <Button onClick={() => handleRevoke(cert.id)}>Revoquer</Button>
+                  <button
+                    className="bg-red-600 text-white hover:bg-red-700 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors w-full"
+                    onClick={() => handleRevoke(cert.id)}
+                  >
+                    Révoquer
+                  </button>
                 </div>
               ) : (
-                <div className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
-                  Certificat deja revoque.
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  Certificat déjà révoqué.
                 </div>
               )}
             </div>
           ))}
 
           {certificates.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-neutral-300 bg-white p-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-400">
+            <div className="md:col-span-2 pki-card p-8 text-center text-sm text-slate-500 dark:text-slate-400 border-dashed">
               Aucun certificat disponible.
             </div>
           )}

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import Button from '../components/Button';
 import { adminService } from '../services/api';
 
 export default function AdminSignCsrPage() {
@@ -39,41 +38,48 @@ export default function AdminSignCsrPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 py-6">
-      <header className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300">
-          Signature CSR
-        </div>
-        <h1 className="text-h3 font-semibold text-[var(--text-1)]">Signer une CSR</h1>
-        <p className="mt-2 text-sm text-[var(--text-3)]">
-          Collez la CSR de l'utilisateur pour generer un certificat immediatement.
+      {/* Page header */}
+      <div className="page-header-bar">
+        <h1 className="text-2xl font-bold text-white">Signer une CSR</h1>
+        <p className="mt-1 text-sm text-white/70">
+          Collez la CSR de l'utilisateur pour générer un certificat immédiatement.
         </p>
-      </header>
+      </div>
 
-      <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-        <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-200">CSR (PEM)</label>
-        <textarea
-          className="mt-2 min-h-[220px] w-full rounded-lg border border-neutral-300 bg-white p-3 text-sm text-neutral-700 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100 dark:focus:ring-primary-900"
-          value={csr}
-          onChange={(e) => setCsr(e.target.value)}
-          placeholder="-----BEGIN CERTIFICATE REQUEST-----"
-        />
+      {/* Main form card */}
+      <div className="pki-card p-6 space-y-5">
+        <div>
+          <label className="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-200">
+            CSR (PEM)
+          </label>
+          <textarea
+            className="pki-input min-h-[200px] font-mono text-xs"
+            value={csr}
+            onChange={(e) => setCsr(e.target.value)}
+            placeholder="-----BEGIN CERTIFICATE REQUEST-----"
+          />
+        </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-3">
           <div>
-            <label className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">Validite (jours)</label>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">
+              Validité (jours)
+            </label>
             <input
               type="number"
               min={1}
-              className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
+              className="pki-input"
               value={validityDays}
               onChange={(e) => setValidityDays(Number(e.target.value))}
             />
           </div>
           <div className="md:col-span-2">
-            <label className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">ID utilisateur (optionnel)</label>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">
+              ID utilisateur (optionnel)
+            </label>
             <input
               type="text"
-              className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
+              className="pki-input"
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
               placeholder="UUID utilisateur si besoin d'association"
@@ -81,26 +87,39 @@ export default function AdminSignCsrPage() {
           </div>
         </div>
 
-        <div className="mt-4 flex items-center gap-3">
-          <Button onClick={handleSign} disabled={loading || !csr.trim()}>Signer la CSR</Button>
-          <Button variant="outline" onClick={downloadCert} disabled={!certificate}>Telecharger</Button>
+        <div className="flex items-center gap-3">
+          <button
+            className="btn btn-green"
+            onClick={handleSign}
+            disabled={loading || !csr.trim()}
+          >
+            {loading ? 'Signature...' : 'Signer la CSR'}
+          </button>
+          <button
+            className="btn btn-primary"
+            onClick={downloadCert}
+            disabled={!certificate}
+          >
+            Télécharger
+          </button>
         </div>
 
         {error && (
-          <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700 dark:border-red-800/50 dark:bg-red-950/40 dark:text-red-300">
             {error}
           </div>
         )}
       </div>
 
-      <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="mb-2 text-sm font-semibold text-neutral-700 dark:text-neutral-200">Certificat genere</div>
+      {/* Result card */}
+      <div className="pki-card p-5">
+        <div className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Certificat généré</div>
         {certificate ? (
-          <pre className="max-h-96 overflow-auto rounded-lg bg-neutral-100 p-3 text-xs text-neutral-700 dark:bg-neutral-950 dark:text-neutral-300">
+          <pre className="bg-slate-100 dark:bg-slate-800 rounded-xl p-3 text-xs font-mono overflow-auto max-h-80 text-slate-700 dark:text-slate-300">
             {certificate}
           </pre>
         ) : (
-          <div className="text-sm text-neutral-500 dark:text-neutral-400">Aucun certificat genere.</div>
+          <div className="text-sm text-slate-500 dark:text-slate-400">Aucun certificat généré pour l'instant.</div>
         )}
       </div>
     </div>

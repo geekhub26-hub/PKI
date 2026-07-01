@@ -16,13 +16,13 @@ function authHeader() {
 
 const LABELS: Record<string, { label: string; hint: string; type: 'number' | 'text' }> = {
   delai_expiration_defaut: {
-    label: 'Délai d\'expiration des récépissés (jours)',
-    hint: 'Nombre de jours de validité d\'un récépissé après génération (1–365).',
+    label: "Délai d'expiration des récépissés (jours)",
+    hint: "Nombre de jours de validité d'un récépissé après génération (1–365).",
     type: 'number',
   },
   entite_code: {
     label: 'Code entité (utilisé dans la numérotation)',
-    hint: 'Sigle de l\'entité inclus dans le numéro : REC-YYYYMMDD-{CODE}-000001.',
+    hint: "Sigle de l'entité inclus dans le numéro : REC-YYYYMMDD-{CODE}-000001.",
     type: 'text',
   },
 };
@@ -70,57 +70,52 @@ export default function SuperAdminSettingsPage() {
   };
 
   if (loading) {
-    return <div className="py-16 text-center text-neutral-500">Chargement...</div>;
+    return <div className="py-16 text-center text-slate-500 dark:text-slate-400">Chargement...</div>;
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8 py-8">
-      {/* Header */}
-      <div className="relative overflow-hidden rounded-3xl border border-purple-200 bg-white p-6 shadow-sm dark:border-purple-900/40 dark:bg-neutral-950">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(147,51,234,0.12),_transparent_60%)]" />
-        <div className="relative z-10">
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-purple-700 dark:border-purple-900/60 dark:bg-purple-950/40 dark:text-purple-300">
-            <Settings2 size={12} /> Paramètres système
+    <div className="mx-auto max-w-2xl space-y-6 py-6">
+      <div className="page-header-bar">
+        <div className="flex items-center gap-3">
+          <Settings2 size={28} className="text-white/80 flex-shrink-0" />
+          <div>
+            <h1 className="text-2xl font-bold text-white">Configuration globale</h1>
+            <p className="mt-0.5 text-sm text-white/70">
+              Paramètres appliqués à l'ensemble de la plateforme ANTIC.
+            </p>
           </div>
-          <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">Configuration globale</h1>
-          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-            Paramètres appliqués à l'ensemble de la plateforme ANTIC.
-          </p>
         </div>
       </div>
 
-      {/* Paramètres */}
       <div className="space-y-4">
         {parametres.map((p) => {
           const meta = LABELS[p.cle];
           const fb = feedback[p.cle];
           return (
-            <div
-              key={p.cle}
-              className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900"
-            >
-              <label className="block text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+            <div key={p.cle} className="pki-card p-6">
+              <label className="block text-sm font-bold text-slate-800 dark:text-slate-100">
                 {meta?.label ?? p.cle}
               </label>
-              {meta?.hint && (
-                <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{meta.hint}</p>
+              {(meta?.hint || p.description) && (
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {meta?.hint ?? p.description}
+                </p>
               )}
-              {p.description && !meta?.hint && (
-                <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{p.description}</p>
-              )}
-              <div className="mt-3 flex items-center gap-3">
+              <div className="mt-4 flex items-center gap-3">
                 <input
                   type={meta?.type ?? 'text'}
                   min={meta?.type === 'number' ? 1 : undefined}
                   max={meta?.type === 'number' ? 365 : undefined}
                   value={values[p.cle] ?? ''}
                   onChange={(e) => setValues((v) => ({ ...v, [p.cle]: e.target.value }))}
-                  className="w-40 rounded-lg border border-neutral-300 bg-neutral-50 px-3 py-2 text-sm text-neutral-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+                  className="pki-input"
+                  style={{ maxWidth: '200px' }}
                 />
                 <button
                   onClick={() => save(p.cle)}
                   disabled={saving === p.cle}
-                  className="flex items-center gap-1.5 rounded-lg border border-purple-300 bg-purple-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-purple-700 disabled:opacity-60 dark:border-purple-700"
+                  className="btn btn-primary"
+                  style={{ padding: '9px 16px', fontSize: '13px' }}
                 >
                   {saving === p.cle
                     ? <RefreshCw size={14} className="animate-spin" />
@@ -129,7 +124,7 @@ export default function SuperAdminSettingsPage() {
                 </button>
               </div>
               {fb && (
-                <div className={`mt-2 flex items-center gap-1.5 text-xs font-medium ${fb.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                <div className={`mt-2 flex items-center gap-1.5 text-xs font-semibold ${fb.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                   {fb.ok ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
                   {fb.msg}
                 </div>

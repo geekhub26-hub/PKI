@@ -47,90 +47,150 @@ export default function DashboardAdminPage() {
     try {
       await adminService.initializeCA();
       await loadDashboard();
-      addToast({ type: 'success', message: 'AC racine initialisee avec succes.' });
+      addToast({ type: 'success', message: 'AC racine initialisée avec succès.' });
       setShowInitModal(false);
     } catch (error: any) {
-      addToast({ type: 'error', message: error?.message || 'Erreur lors de l initialisation.' });
+      addToast({ type: 'error', message: error?.message || "Erreur lors de l'initialisation." });
     } finally {
       setBusyInit(false);
     }
   };
 
-  if (loading) return <div className="p-8 text-[var(--text-3)]">Chargement...</div>;
+  if (loading) return <div className="p-8 text-slate-500 dark:text-slate-400">Chargement...</div>;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 py-6">
-      <header className="rounded-2xl border border-neutral-200 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-primary-50 via-white to-white p-6 shadow-sm dark:border-neutral-800 dark:from-primary-950/40 dark:via-neutral-950 dark:to-neutral-950">
+      <div className="page-header-bar">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-h2 text-[var(--text-1)]">Tableau de bord administrateur</h1>
-            <p className="mt-1 text-sm text-[var(--text-3)]">Connecte en tant que {user?.email}</p>
+            <h1 className="text-2xl font-bold text-white">Tableau de bord administrateur</h1>
+            <p className="mt-1 text-sm text-slate-300">Connecté en tant que {user?.email}</p>
           </div>
-          <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-[var(--brand-700)] shadow-sm ring-1 ring-neutral-200 dark:bg-neutral-900 dark:text-primary-200 dark:ring-neutral-800">
-            <ShieldCheck size={16} />
-            Controle centralise PKI
+          <div className="flex items-center gap-2 rounded-full bg-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-300 ring-1 ring-emerald-400/30">
+            <ShieldCheck size={15} />
+            Contrôle PKI ANTIC
           </div>
         </div>
-      </header>
+      </div>
 
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
-        <QuickLink to="/admin/stats" icon={BarChart3} text="Statistiques" />
-        <QuickLink to="/admin/manage-users" icon={Users} text="Utilisateurs" />
-        <QuickLink to="/admin/requests" icon={Clock3} text="Demandes" />
-        <QuickLink to="/admin/download-crl" icon={Download} text="CRL" />
-      </section>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <Link to="/admin/stats" className="pki-card flex items-center gap-3 px-4 py-3 transition hover:-translate-y-0.5">
+          <BarChart3 size={18} className="text-blue-500 shrink-0" />
+          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Statistiques</span>
+        </Link>
+        <Link to="/admin/manage-users" className="pki-card flex items-center gap-3 px-4 py-3 transition hover:-translate-y-0.5">
+          <Users size={18} className="text-emerald-500 shrink-0" />
+          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Utilisateurs</span>
+        </Link>
+        <Link to="/admin/requests" className="pki-card flex items-center gap-3 px-4 py-3 transition hover:-translate-y-0.5">
+          <Clock3 size={18} className="text-amber-500 shrink-0" />
+          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Demandes</span>
+        </Link>
+        <Link to="/admin/download-crl" className="pki-card flex items-center gap-3 px-4 py-3 transition hover:-translate-y-0.5">
+          <Download size={18} className="text-slate-500 shrink-0" />
+          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">CRL</span>
+        </Link>
+      </div>
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <StatCard icon={Users} label="Utilisateurs" value={dashboard?.totalUsers || 0} />
-        <StatCard icon={Clock3} label="Demandes en attente" value={dashboard?.pendingRequests || 0} />
-        <StatCard icon={CheckCircle2} label="Certificats actifs" value={dashboard?.activeCertificates || 0} />
-        <StatCard icon={XCircle} label="Certificats revoques" value={dashboard?.revokedCertificates || 0} />
-      </section>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div className="stat-card blue p-5">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">Utilisateurs</p>
+          <p className="text-3xl font-extrabold text-slate-800 dark:text-slate-100">{dashboard?.totalUsers || 0}</p>
+          <Users size={16} className="text-blue-400 mt-2" />
+        </div>
+        <div className="stat-card amber p-5">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">Demandes en attente</p>
+          <p className="text-3xl font-extrabold text-slate-800 dark:text-slate-100">{dashboard?.pendingRequests || 0}</p>
+          <Clock3 size={16} className="text-amber-400 mt-2" />
+        </div>
+        <div className="stat-card green p-5">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">Certificats actifs</p>
+          <p className="text-3xl font-extrabold text-slate-800 dark:text-slate-100">{dashboard?.activeCertificates || 0}</p>
+          <CheckCircle2 size={16} className="text-emerald-400 mt-2" />
+        </div>
+        <div className="stat-card red p-5">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">Révoqués</p>
+          <p className="text-3xl font-extrabold text-slate-800 dark:text-slate-100">{dashboard?.revokedCertificates || 0}</p>
+          <XCircle size={16} className="text-red-400 mt-2" />
+        </div>
+      </div>
 
-      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+      <div className="pki-card p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-h3 text-[var(--text-1)]">Autorite de certification</h2>
-          <Building2 className="text-[var(--brand-600)]" size={22} />
+          <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+            <Building2 size={20} className="text-blue-500" />
+            Autorité de certification
+          </h2>
         </div>
 
         {dashboard?.caStatus?.isInitialized ? (
           <div className="space-y-4">
-            <div className="surface-soft flex items-center justify-between p-4">
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs text-[var(--text-3)]">Statut</p>
-                <p className="font-semibold text-[var(--success-600)]">Active</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">Statut</p>
+                <span className="status-badge status-active">Active</span>
               </div>
-              <ShieldCheck size={20} className="text-[var(--success-600)]" />
+              <ShieldCheck size={22} className="text-emerald-500" />
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <Info label="Nom AC" value={dashboard.caStatus.caName} />
-              <Info label="Subject DN" value={dashboard.caStatus.subjectDN} mono />
-              <Info label="Valide depuis" value={dashboard.caStatus.validFrom ? new Date(dashboard.caStatus.validFrom).toLocaleDateString('fr-FR') : 'N/A'} />
-              <Info label="Expire le" value={dashboard.caStatus.validUntil ? new Date(dashboard.caStatus.validUntil).toLocaleDateString('fr-FR') : 'N/A'} />
+              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">Nom AC</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-100">{dashboard.caStatus.caName || 'N/A'}</p>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">Subject DN</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-100 break-all text-xs">{dashboard.caStatus.subjectDN || 'N/A'}</p>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">Valide depuis</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-100">
+                  {dashboard.caStatus.validFrom ? new Date(dashboard.caStatus.validFrom).toLocaleDateString('fr-FR') : 'N/A'}
+                </p>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">Expire le</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-100">
+                  {dashboard.caStatus.validUntil ? new Date(dashboard.caStatus.validUntil).toLocaleDateString('fr-FR') : 'N/A'}
+                </p>
+              </div>
             </div>
           </div>
         ) : (
-          <div className="surface-soft p-5">
-            <div className="mb-3 flex items-center gap-2 text-[var(--warning-600)]">
+          <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-700/40 p-5">
+            <div className="mb-3 flex items-center gap-2 text-amber-600 dark:text-amber-400">
               <AlertTriangle size={18} />
               <p className="font-semibold">Aucune AC active</p>
             </div>
-            <p className="mb-4 text-sm text-[var(--text-2)]">Initialisez une AC racine avant d approuver les CSR.</p>
-            <Button onClick={() => setShowInitModal(true)}>Initialiser l AC</Button>
+            <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
+              Initialisez une AC racine avant d'approuver les CSR.
+            </p>
+            <Button onClick={() => setShowInitModal(true)}>Initialiser l'AC</Button>
           </div>
         )}
-      </section>
+      </div>
 
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
-        <QuickLink to="/admin/generate-ca" icon={Building2} text="Generer AC" />
-        <QuickLink to="/admin/sign-csr" icon={PencilLine} text="Signer CSR" />
-        <QuickLink to="/admin/generate-crl" icon={RefreshCw} text="Generer CRL" />
-        <QuickLink to="/admin/revoke-certificate" icon={XCircle} text="Revoquer cert" />
-      </section>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <Link to="/admin/generate-ca" className="pki-card flex items-center gap-3 px-4 py-3 transition hover:-translate-y-0.5">
+          <Building2 size={18} className="text-blue-500 shrink-0" />
+          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Générer AC</span>
+        </Link>
+        <Link to="/admin/sign-csr" className="pki-card flex items-center gap-3 px-4 py-3 transition hover:-translate-y-0.5">
+          <PencilLine size={18} className="text-emerald-500 shrink-0" />
+          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Signer CSR</span>
+        </Link>
+        <Link to="/admin/generate-crl" className="pki-card flex items-center gap-3 px-4 py-3 transition hover:-translate-y-0.5">
+          <RefreshCw size={18} className="text-amber-500 shrink-0" />
+          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Générer CRL</span>
+        </Link>
+        <Link to="/admin/revoke-certificate" className="pki-card flex items-center gap-3 px-4 py-3 transition hover:-translate-y-0.5">
+          <XCircle size={18} className="text-red-500 shrink-0" />
+          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Révoquer</span>
+        </Link>
+      </div>
 
       <Modal
         open={showInitModal}
-        title="Initialiser l AC racine"
+        title="Initialiser l'AC racine"
         onClose={() => setShowInitModal(false)}
         footer={(
           <>
@@ -139,40 +199,8 @@ export default function DashboardAdminPage() {
           </>
         )}
       >
-        <p className="text-sm text-[var(--text-2)]">Cette action cree la cle et le certificat de l AC racine.</p>
+        <p className="text-sm text-slate-600 dark:text-slate-300">Cette action crée la clé et le certificat de l'AC racine.</p>
       </Modal>
-    </div>
-  );
-}
-
-function QuickLink({ to, icon: Icon, text }: any) {
-  return (
-    <Link to={to} className="group flex items-center gap-3 rounded-2xl border border-neutral-200 bg-white px-4 py-4 shadow-sm transition hover:-translate-y-0.5 hover:border-primary-200 hover:shadow-md dark:border-neutral-800 dark:bg-neutral-900">
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-50 text-[var(--brand-700)] group-hover:bg-primary-100 dark:bg-primary-950/40 dark:text-primary-200">
-        <Icon size={18} />
-      </span>
-      <span className="text-sm font-semibold text-[var(--text-1)]">{text}</span>
-    </Link>
-  );
-}
-
-function StatCard({ icon: Icon, label, value }: any) {
-  return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs text-[var(--text-3)]">{label}</p>
-        <Icon size={16} className="text-[var(--brand-600)]" />
-      </div>
-      <p className="text-3xl font-extrabold text-[var(--text-1)]">{value || 0}</p>
-    </div>
-  );
-}
-
-function Info({ label, value, mono = false }: any) {
-  return (
-    <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-950/40">
-      <p className="text-xs text-[var(--text-3)]">{label}</p>
-      <p className={`mt-1 font-semibold text-[var(--text-1)] ${mono ? 'break-all text-xs' : ''}`}>{value || 'N/A'}</p>
     </div>
   );
 }
