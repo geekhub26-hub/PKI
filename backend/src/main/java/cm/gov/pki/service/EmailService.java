@@ -131,7 +131,7 @@ public class EmailService {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromEmail);
             message.setTo(toEmail);
-            message.setSubject("Votre certificat numÃ©rique - Jeton de validation");
+            message.setSubject("Votre certificat numérique - Jeton de validation");
             
             String validationLink = buildFrontendHashLink(
                 String.format("/validate-token?requestId=%s&token=%s", requestId, validationToken)
@@ -139,13 +139,13 @@ public class EmailService {
             
             String messageBody = String.format(
                 "Bonjour %s,\n\n" +
-                "Votre demande de certificat numÃ©rique a Ã©tÃ© approuvÃ©e.\n\n" +
-                "Pour finaliser et tÃ©lÃ©charger votre certificat, veuillez utiliser le lien ci-dessous :\n\n" +
+                "Votre demande de certificat numérique a été approuvée.\n\n" +
+                "Pour finaliser et télécharger votre certificat, veuillez utiliser le lien ci-dessous :\n\n" +
                 "%s\n\n" +
                 "Ce lien expire dans 24 heures.\n\n" +
-                "Si vous n'avez pas demandÃ© de certificat, merci de contacter notre support.\n\n" +
+                "Si vous n'avez pas demandé de certificat, merci de contacter notre support.\n\n" +
                 "Cordialement,\n" +
-                "AutoritÃ© de Certification Souveraine",
+                "Autorité de Certification Souveraine",
                 userName,
                 validationLink
             );
@@ -154,7 +154,7 @@ public class EmailService {
             
             boolean sent = sendOrLog(message);
             if (!debugMode && sent) {
-                log.info("Email de validation envoyÃ© avec succÃ¨s Ã : {}", toEmail);
+                log.info("Email de validation envoyé avec succès Ã : {}", toEmail);
             }
             
         } catch (Exception e) {
@@ -176,25 +176,25 @@ public class EmailService {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromEmail);
             message.setTo(toEmail);
-            message.setSubject("Demande de certificat numÃ©rique - Rejet");
+            message.setSubject("Demande de certificat numérique - Rejet");
             
             String messageBody = String.format(
                 "Bonjour %s,\n\n" +
-                "Malheureusement, votre demande de certificat numÃ©rique a Ã©tÃ© rejetÃ©e.\n\n" +
+                "Malheureusement, votre demande de certificat numérique a été rejetée.\n\n" +
                 "Raison : %s\n\n" +
-                "Vous pouvez soumettre une nouvelle demande aprÃ¨s avoir rÃ©solu les problÃ¨mes identifiÃ©s.\n\n" +
+                "Vous pouvez soumettre une nouvelle demande après avoir résolu les problèmes identifiés.\n\n" +
                 "Pour toute question, veuillez contacter notre support.\n\n" +
                 "Cordialement,\n" +
-                "AutoritÃ© de Certification Souveraine",
+                "Autorité de Certification Souveraine",
                 userName,
-                rejectionReason != null && !rejectionReason.isBlank() ? rejectionReason : "Non spÃ©cifiÃ©e"
+                rejectionReason != null && !rejectionReason.isBlank() ? rejectionReason : "Non spécifiée"
             );
             
             message.setText(messageBody);
             
             boolean sent = sendOrLog(message);
             if (!debugMode && sent) {
-                log.info("Email de rejet envoyÃ© avec succÃ¨s Ã : {}", toEmail);
+                log.info("Email de rejet envoyé avec succès Ã : {}", toEmail);
             }
             
         } catch (Exception e) {
@@ -203,18 +203,18 @@ public class EmailService {
     }
 
     /**
-     * Envoie un email avec un lien de rÃ©initialisation de mot de passe
+     * Envoie un email avec un lien de réinitialisation de mot de passe
      *
      * @param toEmail         Email du destinataire
      * @param userName        Nom de l'utilisateur
-     * @param resetToken      Token de rÃ©initialisation
+     * @param resetToken      Token de réinitialisation
      */
     public void sendPasswordResetEmail(String toEmail, String userName, String resetToken) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromEmail);
             message.setTo(toEmail);
-            message.setSubject("RÃ©initialisation de votre mot de passe");
+            message.setSubject("Réinitialisation de votre mot de passe");
             
             String resetLink = buildFrontendHashLink(
                 String.format("/reset-password?token=%s", resetToken)
@@ -222,13 +222,13 @@ public class EmailService {
             
             String messageBody = String.format(
                 "Bonjour %s,\n\n" +
-                "Vous avez demandÃ© la rÃ©initialisation de votre mot de passe.\n\n" +
-                "Veuillez cliquer sur le lien ci-dessous pour crÃ©er un nouveau mot de passe :\n\n" +
+                "Vous avez demandé la réinitialisation de votre mot de passe.\n\n" +
+                "Veuillez cliquer sur le lien ci-dessous pour créer un nouveau mot de passe :\n\n" +
                 "%s\n\n" +
                 "Ce lien expire dans 24 heures.\n\n" +
-                "Si vous n'avez pas demandÃ© cette rÃ©initialisation, vous pouvez ignorer cet email.\n\n" +
+                "Si vous n'avez pas demandé cette réinitialisation, vous pouvez ignorer cet email.\n\n" +
                 "Cordialement,\n" +
-                "AutoritÃ© de Certification Souveraine",
+                "Autorité de Certification Souveraine",
                 userName,
                 resetLink
             );
@@ -237,16 +237,16 @@ public class EmailService {
             
             boolean sent = sendOrLog(message);
             if (!debugMode && sent) {
-                log.info("Email de rÃ©initialisation du mot de passe envoyÃ© Ã : {}", toEmail);
+                log.info("Email de réinitialisation du mot de passe envoyé Ã : {}", toEmail);
             }
             
         } catch (Exception e) {
-            log.error("Erreur lors de l'envoi de l'email de rÃ©initialisation Ã  {}: {}", toEmail, e.getMessage(), e);
+            log.error("Erreur lors de l'envoi de l'email de réinitialisation Ã  {}: {}", toEmail, e.getMessage(), e);
         }
     }
 
     /**
-     * Envoie un email de confirmation de rÃ©initialisation de mot de passe rÃ©ussie
+     * Envoie un email de confirmation de réinitialisation de mot de passe réussie
      *
      * @param toEmail   Email du destinataire
      * @param userName  Nom de l'utilisateur
@@ -256,15 +256,15 @@ public class EmailService {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromEmail);
             message.setTo(toEmail);
-            message.setSubject("Votre mot de passe a Ã©tÃ© rÃ©initialisÃ©");
+            message.setSubject("Votre mot de passe a été réinitialisé");
             
             String messageBody = String.format(
                 "Bonjour %s,\n\n" +
-                "Votre mot de passe a Ã©tÃ© rÃ©initialisÃ© avec succÃ¨s.\n\n" +
+                "Votre mot de passe a été réinitialisé avec succès.\n\n" +
                 "Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.\n\n" +
-                "Si vous n'avez pas effectuÃ© cette modification, veuillez contacter notre support immÃ©diatement.\n\n" +
+                "Si vous n'avez pas effectué cette modification, veuillez contacter notre support immédiatement.\n\n" +
                 "Cordialement,\n" +
-                "AutoritÃ© de Certification Souveraine",
+                "Autorité de Certification Souveraine",
                 userName
             );
             
@@ -272,7 +272,7 @@ public class EmailService {
             
             boolean sent = sendOrLog(message);
             if (!debugMode && sent) {
-                log.info("Email de confirmation de rÃ©initialisation envoyÃ© Ã : {}", toEmail);
+                log.info("Email de confirmation de réinitialisation envoyé Ã : {}", toEmail);
             }
             
         } catch (Exception e) {
