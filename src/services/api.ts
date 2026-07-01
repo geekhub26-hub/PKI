@@ -372,8 +372,8 @@ export const userService = {
   downloadCertificateP12: async (certificateId: string, password: string): Promise<Blob> => {
     const response = await apiClient.post(
       `/user/certificates/${certificateId}/download-p12`,
-      null,
-      { params: { password }, responseType: 'blob' }
+      { password },
+      { responseType: 'blob' }
     );
     return response.data as Blob;
   },
