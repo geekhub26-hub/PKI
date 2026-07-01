@@ -7,7 +7,8 @@ export default function UserCertificatesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<'pem' | 'crt' | 'p12' | null>(null);
-  const [p12Password, setP12Password] = useState('');
+  const [p12GeneratedPassword, setP12GeneratedPassword] = useState<string | null>(null);
+  const [p12EmailSent, setP12EmailSent] = useState(false);
   const [renewMessage, setRenewMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -50,30 +51,24 @@ export default function UserCertificatesPage() {
   }
 
   async function downloadP12() {
-    if (!cert?.id || !p12Password) return;
+    if (!cert?.id) return;
     try {
       setDownloading('p12');
-      const blob = await userService.downloadCertificateP12(cert.id, p12Password);
-      // Check if the backend returned a JSON error instead of a binary blob
-      if (blob.type === 'application/json') {
-        const text = await blob.text();
-        try {
-          const json = JSON.parse(text);
-          setError(json.error || 'Erreur lors du téléchargement du fichier .p12.');
-        } catch {
-          setError('Erreur lors du téléchargement du fichier .p12.');
-        }
-        return;
-      }
-      const url = window.URL.createObjectURL(blob);
+      setP12GeneratedPassword(null);
+      const { p12Base64, password, emailSent, filename } = await userService.downloadCertificateP12(cert.id);
+      // Décoder le base64 et déclencher le téléchargement
+      const bytes = Uint8Array.from(atob(p12Base64), (c) => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: 'application/x-pkcs12' });
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `certificate-${cert.id}.p12`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
+      URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      setP12Password('');
+      setP12GeneratedPassword(password);
+      setP12EmailSent(emailSent);
     } catch {
       setError('Erreur lors du téléchargement du fichier .p12.');
     } finally {
@@ -206,22 +201,29 @@ export default function UserCertificatesPage() {
                 </div>
               ) : (
                 <>
-                  <input
-                    type="password"
-                    value={p12Password}
-                    onChange={(e) => setP12Password(e.target.value)}
-                    placeholder="Mot de passe de protection"
-                    disabled={!cert || downloading !== null}
-                    className="mb-2 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-800 placeholder-neutral-400 focus:border-primary-600 focus:outline-none disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
-                  />
                   <button
                     onClick={downloadP12}
-                    disabled={downloading !== null || !cert || !p12Password}
+                    disabled={downloading !== null || !cert}
                     className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-primary-800 py-2.5 text-sm font-semibold text-primary-800 transition hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-primary-300 dark:text-primary-300 dark:hover:bg-primary-950/30"
                   >
-                    {downloading === 'p12' ? 'Téléchargement...' : 'Certificat + clé (.p12)'}
+                    {downloading === 'p12' ? 'Génération...' : 'Certificat + clé (.p12)'}
                   </button>
-                  <div className="mt-1 text-xs text-neutral-400 dark:text-neutral-500">Contient votre certificat et votre clé privée, protégé par mot de passe.</div>
+                  <div className="mt-1 text-xs text-neutral-400 dark:text-neutral-500">
+                    Le mot de passe est généré automatiquement et envoyé à votre adresse email.
+                  </div>
+                  {p12GeneratedPassword && (
+                    <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-800/40 dark:bg-emerald-950/30">
+                      <div className="mb-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                        Mot de passe de votre fichier .p12
+                      </div>
+                      <div className="break-all rounded bg-white px-2 py-1 font-mono text-sm font-bold tracking-widest text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-100">
+                        {p12GeneratedPassword}
+                      </div>
+                      <div className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
+                        {p12EmailSent ? 'Également envoyé à votre adresse email.' : 'Notez ce mot de passe — il ne sera plus affiché.'}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>

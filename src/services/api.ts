@@ -370,13 +370,9 @@ export const userService = {
     return response.data as Blob;
   },
 
-  downloadCertificateP12: async (certificateId: string, password: string): Promise<Blob> => {
-    const response = await apiClient.post(
-      `/user/certificates/${certificateId}/download-p12`,
-      { password },
-      { responseType: 'blob' }
-    );
-    return response.data as Blob;
+  downloadCertificateP12: async (certificateId: string): Promise<{ p12Base64: string; password: string; emailSent: boolean; filename: string }> => {
+    const response = await apiClient.post<{ p12Base64: string; password: string; emailSent: boolean; filename: string }>(`/user/certificates/${certificateId}/download-p12`, {});
+    return response.data;
   },
 
   revokeCertificate: async (certificateId: string, reason?: string): Promise<any> => {
