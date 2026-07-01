@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bell } from 'lucide-react';
+import { Bell, X, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { adminService, userService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
@@ -12,15 +12,19 @@ type NotificationItem = {
   title: string;
   subtitle?: string;
   href: string;
-  tone?: 'danger' | 'info';
+  tone?: 'danger' | 'info' | 'success';
 };
 
+function getInitials(firstName?: string, lastName?: string) {
+  return ((firstName?.[0] ?? '') + (lastName?.[0] ?? '')).toUpperCase() || '?';
+}
+
 export default function TopBar() {
-  const navigate = useNavigate();
-  const user = useAuthStore((s) => s.user);
+  const navigate  = useNavigate();
+  const user      = useAuthStore((s) => s.user);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
-  const [items, setItems] = useState<NotificationItem[]>([]);
+  const [open,    setOpen]    = useState(false);
+  const [items,   setItems]   = useState<NotificationItem[]>([]);
   const [readIds, setReadIds] = useState<string[]>([]);
 
   const storageKey = user ? `pki_notifications_read_${user.id}` : 'pki_notifications_read';
@@ -28,168 +32,161 @@ export default function TopBar() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(storageKey);
-      if (raw) {
-        const parsed: string[] = JSON.parse(raw);
-        setReadIds(parsed);
-        return;
-      }
-    } catch {
-      // ignore
-    }
+      if (raw) { setReadIds(JSON.parse(raw)); return; }
+    } catch { /* ignore */ }
     setReadIds([]);
   }, [storageKey]);
 
   useEffect(() => {
     let alive = true;
-
     const load = async () => {
       try {
         if (!user) return;
         if (user.role === 'ADMIN') {
-          await adminService.getDashboard();
-          if (!alive) return;
           const list = await adminService.getCertificateRequests('PENDING_REVIEW', 0, 5);
           if (!alive) return;
-          setItems(
-            (list?.items || []).map((r: any) => ({
-              id: r.id,
-              title: `Demande ${r.commonName || r.id}`,
-              subtitle: r.submittedAt ? new Date(r.submittedAt).toLocaleString() : undefined,
-              href: `/admin/requests/${r.id}`,
-              tone: 'danger',
-            }))
-          );
+          setItems((list?.items || []).map((r: any) => ({
+            id: r.id,
+            title: `Demande : ${r.commonName || r.id.slice(0, 8)}`,
+            subtitle: r.submittedAt ? new Date(r.submittedAt).toLocaleString('fr-FR') : undefined,
+            href: `/admin/requests/${r.id}`,
+            tone: 'danger',
+          })));
         } else {
           const requests = await userService.getMyRequests();
           if (!alive) return;
-          const actionable = requests.filter((r) => USER_ACTION_STATUSES.has(String(r.status || '').toUpperCase()));
-          setItems(
-            actionable.slice(0, 5).map((r) => ({
-              id: r.id,
-              title: `Demande ${r.commonName || r.id}`,
-              subtitle: r.status === 'NEEDS_CORRECTION' ? 'Correction demandee' : 'CSR autorise',
-              href: '/requests',
-              tone: r.status === 'NEEDS_CORRECTION' ? 'danger' : 'info',
-            }))
-          );
+          const actionable = requests.filter((r) => USER_ACTION_STATUSES.has(String(r.status ?? '').toUpperCase()));
+          setItems(actionable.slice(0, 5).map((r) => ({
+            id: r.id,
+            title: `Demande : ${r.commonName || r.id.slice(0, 8)}`,
+            subtitle: r.status === 'NEEDS_CORRECTION' ? 'Correction requise' : 'CSR autorisé',
+            href: '/requests',
+            tone: r.status === 'NEEDS_CORRECTION' ? 'danger' : 'info',
+          })));
         }
-      } catch {
-        if (!alive) return;
-          setItems([]);
-      } finally {
-        if (!alive) return;
-        setLoading(false);
-      }
+      } catch { if (alive) setItems([]); }
+      finally  { if (alive) setLoading(false); }
     };
-
     load();
-    const id = window.setInterval(load, 30000);
-    return () => {
-      alive = false;
-      window.clearInterval(id);
-    };
+    const id = window.setInterval(load, 30_000);
+    return () => { alive = false; window.clearInterval(id); };
   }, [user]);
 
-  const goToNotifications = () => setOpen((v) => !v);
-  const readSet = useMemo(() => new Set(readIds), [readIds]);
+  const readSet    = useMemo(() => new Set(readIds), [readIds]);
   const unreadCount = items.filter((i) => !readSet.has(i.id)).length;
-  const badgeClass =
-    unreadCount > 0
-      ? user?.role === 'ADMIN'
-        ? 'bg-red-600'
-        : 'bg-amber-500'
-      : 'bg-neutral-400';
 
-  const persistReadIds = (next: string[]) => {
+  const persistRead = (next: string[]) => {
     setReadIds(next);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(next));
-    } catch {
-      // ignore
-    }
+    try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* */ }
   };
+  const markAllRead = () => persistRead(Array.from(new Set([...readIds, ...items.map((i) => i.id)])));
 
-  const markAllRead = () => {
-    const merged = Array.from(new Set([...readIds, ...items.map((i) => i.id)]));
-    persistReadIds(merged);
+  const toneStyle = (tone?: string) => {
+    if (tone === 'danger')  return { dot: '#EF4444', label: 'URGENT', color: '#EF4444' };
+    if (tone === 'success') return { dot: '#10B981', label: 'OK',     color: '#10B981' };
+    return                         { dot: '#60A5FA', label: 'INFO',   color: '#60A5FA' };
   };
 
   return (
-    <div className="sticky top-0 z-30 flex items-center justify-end gap-3 border-b border-neutral-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90 md:rounded-2xl md:top-4 md:mx-4">
-      <button
-        type="button"
-        onClick={goToNotifications}
-        className="relative inline-flex items-center justify-center rounded-lg border border-neutral-200 bg-white px-3 py-2 text-neutral-700 shadow-sm transition hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
-        aria-label="Notifications"
-        title="Notifications"
-      >
-        <Bell size={18} />
-        {!loading && unreadCount > 0 && (
-          <span className={`absolute -top-1 -right-1 min-w-[18px] rounded-full px-1.5 text-xs font-bold text-white ${badgeClass}`}>
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
+    <div className="topbar sticky top-0 z-30 flex items-center justify-end gap-2 px-6">
+
+      {/* Page breadcrumb / title area — left side */}
+      <div className="mr-auto flex items-center gap-2">
+        <ShieldCheck size={15} className="text-emerald-500" />
+        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+          PKI Souverain — ANTIC Cameroun
+        </span>
+      </div>
+
+      {/* Notifications bell */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+          aria-label="Notifications"
+        >
+          <Bell size={16} />
+          {!loading && unreadCount > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white leading-none">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </button>
+
+        {/* Dropdown */}
+        {open && (
+          <>
+            <button
+              className="fixed inset-0 z-40"
+              onClick={() => setOpen(false)}
+              aria-label="Fermer"
+            />
+            <div className="absolute right-0 top-11 z-50 w-80 animate-fade-up overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card-hover dark:border-slate-700 dark:bg-slate-900">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+                <span className="text-sm font-bold text-slate-800 dark:text-slate-100">Notifications</span>
+                <div className="flex items-center gap-3">
+                  <button onClick={markAllRead} className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 transition dark:hover:text-slate-200">
+                    Tout lire
+                  </button>
+                  <button onClick={() => { setOpen(false); navigate(user?.role === 'ADMIN' ? '/admin/requests' : '/requests'); }}
+                    className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 transition">
+                    Voir tout <ArrowRight size={11} />
+                  </button>
+                  <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-600 transition">
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Items */}
+              <div className="max-h-72 overflow-y-auto p-2">
+                {items.length === 0 ? (
+                  <div className="flex flex-col items-center py-6 text-center">
+                    <Bell size={28} className="mb-2 text-slate-300 dark:text-slate-600" />
+                    <p className="text-xs text-slate-400 dark:text-slate-500">Aucune notification</p>
+                  </div>
+                ) : (
+                  items.map((n) => {
+                    const ts = toneStyle(n.tone);
+                    const isRead = readSet.has(n.id);
+                    return (
+                      <button
+                        key={n.id}
+                        onClick={() => {
+                          if (!isRead) persistRead(Array.from(new Set([...readIds, n.id])));
+                          setOpen(false);
+                          navigate(n.href);
+                        }}
+                        className="mb-1 flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800"
+                      >
+                        <div className="mt-0.5 flex-shrink-0">
+                          <div className="h-2 w-2 rounded-full" style={{ background: isRead ? '#CBD5E1' : ts.dot }} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="truncate text-xs font-semibold text-slate-800 dark:text-slate-100">{n.title}</div>
+                          {n.subtitle && <div className="mt-0.5 text-[11px] text-slate-400">{n.subtitle}</div>}
+                        </div>
+                        <span className="mt-0.5 text-[10px] font-bold" style={{ color: ts.color }}>{ts.label}</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </>
         )}
-      </button>
+      </div>
+
+      {/* Theme toggle */}
       <ThemeToggle />
 
-      {open && (
-        <div className="absolute right-4 top-14 w-80 rounded-xl border border-neutral-200 bg-white p-3 shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Notifications</div>
-            <div className="flex items-center gap-2">
-              <button
-                className="text-xs text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
-                onClick={markAllRead}
-              >
-                Tout lire
-              </button>
-              <button
-                className="text-xs text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
-                onClick={() => {
-                  setOpen(false);
-                  if (user?.role === 'ADMIN') navigate('/admin/requests');
-                  else navigate('/requests');
-                }}
-              >
-                Voir tout
-              </button>
-            </div>
-          </div>
-          {items.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-neutral-200 p-3 text-xs text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
-              Aucune notification pour le moment.
-            </div>
-          ) : (
-            <ul className="space-y-2">
-              {items.map((n) => (
-                <li key={n.id}>
-                  <button
-                    onClick={() => {
-                      if (!readSet.has(n.id)) {
-                        persistReadIds(Array.from(new Set([...readIds, n.id])));
-                      }
-                      setOpen(false);
-                      navigate(n.href);
-                    }}
-                    className="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-left text-sm text-neutral-800 transition hover:bg-neutral-100 dark:border-neutral-800 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2 font-semibold">
-                        {!readSet.has(n.id) && <span className="h-2 w-2 rounded-full bg-sky-500" />}
-                        {n.title}
-                      </span>
-                      <span className={`text-[10px] font-bold ${n.tone === 'danger' ? 'text-red-600' : 'text-sky-600'}`}>
-                        {n.tone === 'danger' ? 'URGENT' : 'INFO'}
-                      </span>
-                    </div>
-                    {n.subtitle && <div className="text-xs text-neutral-500 dark:text-neutral-400">{n.subtitle}</div>}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      {/* Avatar */}
+      <div className="flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold text-white"
+        style={{ background: 'linear-gradient(135deg, #1E4A7E, #0A1E3D)' }}>
+        {getInitials(user?.firstName, user?.lastName)}
+      </div>
     </div>
   );
 }

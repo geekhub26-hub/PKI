@@ -117,14 +117,16 @@ function App() {
           <Route
             element={
               <ProtectedRoute>
-                <div className="flex min-h-screen">
+                <div className="flex h-screen overflow-hidden">
                   <Sidebar />
-                  <main className="flex-1 bg-neutral-50 p-4 pt-4 sm:p-6 md:p-8 dark:bg-neutral-950">
+                  <div className="flex flex-1 flex-col overflow-hidden">
                     <TopBar />
-                    <ErrorBoundary>
-                      <Outlet />
-                    </ErrorBoundary>
-                  </main>
+                    <main className="flex-1 overflow-y-auto bg-neutral-50 dark:bg-neutral-950 p-4 sm:p-6 md:p-8">
+                      <ErrorBoundary>
+                        <Outlet />
+                      </ErrorBoundary>
+                    </main>
+                  </div>
                 </div>
               </ProtectedRoute>
             }
