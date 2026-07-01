@@ -235,6 +235,7 @@ export interface Certificate {
   notBefore: string;
   notAfter: string;
   certificatePem: string;
+  hasPrivateKey: boolean;
 }
 
 export interface AdminCertificate {
