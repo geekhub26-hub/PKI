@@ -183,17 +183,26 @@ export default function UserGenerateCsrPage() {
 
   const startCamera = async () => {
     setCameraError(null);
+    setVideoReady(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
       });
       streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
+      // Ne pas assigner srcObject ici — on attend que le <video> soit dans le DOM (useEffect ci-dessous)
       setCameraActive(true);
     } catch {
       setCameraError("Impossible d'accéder à la caméra. Vérifiez les permissions du navigateur.");
     }
   };
+
+  // Assigne srcObject après que <video> est rendu dans le DOM
+  useEffect(() => {
+    if (cameraActive && streamRef.current && videoRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [cameraActive]);
 
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
