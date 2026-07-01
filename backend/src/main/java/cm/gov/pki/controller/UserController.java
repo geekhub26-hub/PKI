@@ -936,6 +936,7 @@ public class UserController {
         private String notBefore;
         private String notAfter;
         private String certificatePem;
+        private boolean hasPrivateKey;
 
         public CertificateDTO() {}
 
@@ -948,6 +949,7 @@ public class UserController {
             this.notBefore = cert.getNotBefore() != null ? cert.getNotBefore().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) : null;
             this.notAfter = cert.getNotAfter() != null ? cert.getNotAfter().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) : null;
             this.certificatePem = cert.getCertificatePem();
+            this.hasPrivateKey = cert.getPrivateKeyPem() != null && !cert.getPrivateKeyPem().isBlank();
         }
 
         public String getId() { return id; }
@@ -966,6 +968,8 @@ public class UserController {
         public void setNotAfter(String notAfter) { this.notAfter = notAfter; }
         public String getCertificatePem() { return certificatePem; }
         public void setCertificatePem(String certificatePem) { this.certificatePem = certificatePem; }
+        public boolean isHasPrivateKey() { return hasPrivateKey; }
+        public void setHasPrivateKey(boolean hasPrivateKey) { this.hasPrivateKey = hasPrivateKey; }
     }
 
     public static class CertificateRequestDTO {
