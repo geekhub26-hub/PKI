@@ -7,8 +7,9 @@ import cm.gov.pki.entity.User;
 import cm.gov.pki.repository.CAConfigurationRepository;
 import cm.gov.pki.repository.CertificateRepository;
 import cm.gov.pki.repository.CertificateRequestRepository;
-import cm.gov.pki.service.CAService;
 import cm.gov.pki.service.AuditService;
+import cm.gov.pki.service.CAService;
+import cm.gov.pki.service.EmailService;
 import cm.gov.pki.service.IdentityDocumentAiService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -69,6 +71,7 @@ public class UserController {
     private final IdentityDocumentAiService identityDocumentAiService;
     private final CAConfigurationRepository caConfigurationRepository;
     private final AuditService auditService;
+    private final EmailService emailService;
 
     @Autowired
     public UserController(
@@ -77,13 +80,15 @@ public class UserController {
             CAService caService,
             IdentityDocumentAiService identityDocumentAiService,
             CAConfigurationRepository caConfigurationRepository,
-            AuditService auditService
+            AuditService auditService,
+            EmailService emailService
     ) {
         this.certificateRepository = certificateRepository;
         this.certificateRequestRepository = certificateRequestRepository;
         this.caService = caService;
         this.identityDocumentAiService = identityDocumentAiService;
         this.caConfigurationRepository = caConfigurationRepository;
+        this.emailService = emailService;
         this.auditService = auditService;
     }
 
@@ -561,41 +566,75 @@ public class UserController {
     @PostMapping("/certificates/{certificateId}/download-p12")
     public ResponseEntity<?> downloadCertificateP12(
             Authentication authentication,
-            @PathVariable("certificateId") UUID certificateId,
-            @RequestBody Map<String, String> body) {
+            @PathVariable("certificateId") UUID certificateId) {
         if (authentication == null || !(authentication.getPrincipal() instanceof User)) {
             return ResponseEntity.status(401).build();
         }
         User user = (User) authentication.getPrincipal();
         var certOpt = certificateRepository.findById(certificateId);
-        if (certOpt.isEmpty()) return ResponseEntity.status(404).body(Map.of("error", "Certificate not found"));
+        if (certOpt.isEmpty()) return ResponseEntity.status(404).body(Map.of("error", "Certificat introuvable."));
         Certificate certificate = certOpt.get();
         if (!certificate.getUser().getId().equals(user.getId())) {
-            return ResponseEntity.status(403).body(Map.of("error", "Unauthorized"));
-        }
-
-        String password = body == null ? null : body.get("password");
-        if (password == null || password.length() < 8) {
-            return ResponseEntity.status(400).body(Map.of("error", "Mot de passe .p12 requis (minimum 8 caracteres)."));
+            return ResponseEntity.status(403).body(Map.of("error", "Accès non autorisé."));
         }
         if (certificate.getPrivateKeyPem() == null || certificate.getPrivateKeyPem().isBlank()) {
             return ResponseEntity.status(400).body(Map.of(
-                    "error",
-                    "Export .p12/.pfx indisponible pour ce certificat. Utilisez .crt ou .pem."
+                    "error", "Export .p12 indisponible — la clé privée n'est pas stockée sur le serveur (CSR fourni par l'utilisateur)."
             ));
         }
 
-        byte[] contentBytes = caService.buildPkcs12(
+        String password = generateP12Password();
+        byte[] p12Bytes = caService.buildPkcs12(
                 certificate.getCertificatePem(),
                 certificate.getPrivateKeyPem(),
                 password,
                 "cert-" + certificate.getId()
         );
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_TYPE, "application/x-pkcs12")
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"certificate-" + certificateId + ".p12\"")
-                .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(contentBytes.length))
-                .body(contentBytes);
+
+        String emailBody = String.format(
+            "Bonjour %s %s,\n\n" +
+            "Votre fichier de certificat PKCS#12 (.p12) vient d'être généré.\n\n" +
+            "Mot de passe de protection : %s\n\n" +
+            "Conservez ce mot de passe en lieu sûr — il est nécessaire pour importer votre certificat.\n\n" +
+            "Cordialement,\n" +
+            "Autorité de Certification Souveraine",
+            user.getFirstName(), user.getLastName(), password
+        );
+        boolean sent = emailService.sendSimpleEmail(user.getEmail(), "Mot de passe de votre fichier .p12 — PKI Souverain", emailBody);
+        if (!sent) {
+            log.warn("Impossible d'envoyer l'email du mot de passe .p12 à {}", user.getEmail());
+        }
+
+        String p12Base64 = Base64.getEncoder().encodeToString(p12Bytes);
+        return ResponseEntity.ok(Map.of(
+                "p12Base64", p12Base64,
+                "password", password,
+                "emailSent", sent,
+                "filename", "certificate-" + certificateId + ".p12"
+        ));
+    }
+
+    private static String generateP12Password() {
+        // Mélange de majuscules, minuscules, chiffres et caractères spéciaux (évite les ambiguïtés 0/O, 1/l/I)
+        String upper   = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+        String lower   = "abcdefghjkmnpqrstuvwxyz";
+        String digits  = "23456789";
+        String special = "@#$!%&*";
+        String all     = upper + lower + digits + special;
+        SecureRandom rnd = new SecureRandom();
+        char[] pwd = new char[16];
+        // Garantir au moins un caractère de chaque catégorie
+        pwd[0]  = upper.charAt(rnd.nextInt(upper.length()));
+        pwd[1]  = lower.charAt(rnd.nextInt(lower.length()));
+        pwd[2]  = digits.charAt(rnd.nextInt(digits.length()));
+        pwd[3]  = special.charAt(rnd.nextInt(special.length()));
+        for (int i = 4; i < 16; i++) pwd[i] = all.charAt(rnd.nextInt(all.length()));
+        // Mélanger
+        for (int i = 15; i > 0; i--) {
+            int j = rnd.nextInt(i + 1);
+            char tmp = pwd[i]; pwd[i] = pwd[j]; pwd[j] = tmp;
+        }
+        return new String(pwd);
     }
 
     @PostMapping("/certificates/{certificateId}/revoke")
