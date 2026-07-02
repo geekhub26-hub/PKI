@@ -20,29 +20,30 @@ interface User {
 
 function rolePillClass(role: string) {
   switch (role) {
-    case 'SUPER_ADMIN': return 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300';
-    case 'ADMIN': return 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
-    default: return 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+    case 'SUPER_ADMIN':
+      return 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300';
+    case 'ADMIN':
+      return 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
+    default:
+      return 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
   }
 }
 
 export default function AdminManageUsersPage() {
   const user = useAuthStore((state) => state.user);
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(0);
-  const [total, setTotal] = useState(0);
+  const [users, setUsers]           = useState<User[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [page, setPage]             = useState(0);
+  const [total, setTotal]           = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [userToDelete, setUserToDelete] = useState<User | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [userToDelete, setUserToDelete]       = useState<User | null>(null);
+  const [deleting, setDeleting]               = useState(false);
   const { addToast } = useToast();
 
   const pageSize = 20;
 
-  useEffect(() => {
-    loadUsers();
-  }, [page]);
+  useEffect(() => { loadUsers(); }, [page]);
 
   const loadUsers = async () => {
     try {
@@ -51,8 +52,7 @@ export default function AdminManageUsersPage() {
       setUsers(data.items);
       setTotal(data.total);
       setTotalPages(data.totalPages);
-    } catch (error: any) {
-      console.error('Erreur lors du chargement des utilisateurs:', error);
+    } catch {
       addToast({ type: 'error', message: 'Impossible de charger les utilisateurs' });
     } finally {
       setLoading(false);
@@ -78,100 +78,103 @@ export default function AdminManageUsersPage() {
       setUserToDelete(null);
       loadUsers();
     } catch (error: any) {
-      console.error('Erreur lors de la suppression:', error);
       addToast({ type: 'error', message: error?.response?.data?.error || 'Erreur lors de la suppression' });
     } finally {
       setDeleting(false);
     }
   };
 
-  const formatDate = (dateString: string | undefined) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('fr-FR');
-  };
+  const formatDate = (d?: string) => d ? new Date(d).toLocaleDateString('fr-FR') : '—';
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 py-6">
-      {/* Page header */}
-      <div className="page-header-bar flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Users size={28} className="text-white/80" />
+      {/* Header */}
+      <div className="page-header-bar">
+        <div className="flex items-center justify-between">
           <div>
+            <p className="mb-1 text-xs font-bold uppercase tracking-widest text-white/50">Administration PKI</p>
             <h1 className="text-2xl font-bold text-white">Gestion des utilisateurs</h1>
-            <p className="mt-0.5 text-sm text-white/70">Administration des comptes</p>
+            <p className="mt-0.5 text-sm text-white/60">Administration des comptes de la plateforme</p>
           </div>
+          <Link
+            to="/admin/dashboard"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/20 transition hover:bg-white/20"
+          >
+            <ChevronLeft size={14} /> Retour
+          </Link>
         </div>
-        <Link
-          to="/admin/dashboard"
-          className="inline-flex items-center gap-1 rounded-lg bg-white/10 hover:bg-white/20 transition-colors px-3 py-1.5 text-sm font-semibold text-white"
-        >
-          <ChevronLeft size={15} /> Retour dashboard
-        </Link>
       </div>
 
       {loading ? (
-        <div className="pki-card p-8 text-center text-slate-500 dark:text-slate-400">Chargement...</div>
+        <div className="flex items-center justify-center py-16">
+          <div className="h-7 w-7 animate-spin rounded-full border-2 border-slate-200 border-t-blue-500" />
+        </div>
       ) : (
         <>
-          {/* Total count info */}
-          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 p-4 text-sm text-slate-600 dark:text-slate-300">
-            Total utilisateurs : <span className="font-bold text-slate-800 dark:text-slate-100">{total}</span>
+          {/* Total KPI */}
+          <div className="kpi-card blue" style={{ maxWidth: '240px' }}>
+            <div className="kpi-icon blue"><Users size={22} /></div>
+            <div className="kpi-body">
+              <div className="kpi-value">{total}</div>
+              <div className="kpi-label">Utilisateurs</div>
+            </div>
           </div>
 
-          {/* Users table */}
+          {/* Table */}
           <div className="pki-card overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px]">
-                <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700/50">
-                  <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    <th className="px-5 py-3">Email</th>
-                    <th className="px-5 py-3">Nom</th>
-                    <th className="px-5 py-3">Rôle</th>
-                    <th className="px-5 py-3">Statut</th>
-                    <th className="px-5 py-3">Créé le</th>
-                    <th className="px-5 py-3">Dernière connexion</th>
-                    <th className="px-5 py-3 text-center">Actions</th>
+              <table className="pki-table" style={{ minWidth: '920px' }}>
+                <thead>
+                  <tr>
+                    <th>Email</th>
+                    <th>Nom complet</th>
+                    <th>Rôle</th>
+                    <th>Statut</th>
+                    <th>Créé le</th>
+                    <th>Dernière connexion</th>
+                    <th className="text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {users.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                      <td colSpan={7} className="py-12 text-center text-sm text-slate-400">
                         Aucun utilisateur.
                       </td>
                     </tr>
                   ) : (
                     users.map((u) => (
-                      <tr
-                        key={u.id}
-                        className="border-t border-slate-100 dark:border-slate-700/50 text-sm hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors"
-                      >
-                        <td className="px-5 py-4 font-mono text-xs text-slate-800 dark:text-slate-100">{u.email}</td>
-                        <td className="px-5 py-4 text-slate-700 dark:text-slate-200">{u.firstName} {u.lastName}</td>
-                        <td className="px-5 py-4">
+                      <tr key={u.id}>
+                        <td>
+                          <span className="font-mono text-xs">{u.email}</span>
+                        </td>
+                        <td className="font-medium">{u.firstName} {u.lastName}</td>
+                        <td>
                           <span className={rolePillClass(u.role)}>{u.role}</span>
                         </td>
-                        <td className="px-5 py-4">
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${u.isActive ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300'}`}>
-                            {u.isActive
-                              ? <CheckCircle2 size={13} />
-                              : <Ban size={13} />}
+                        <td>
+                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            u.isActive
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                              : 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300'
+                          }`}>
+                            {u.isActive ? <CheckCircle2 size={12} /> : <Ban size={12} />}
                             {u.isActive ? 'Actif' : 'Inactif'}
                           </span>
                         </td>
-                        <td className="px-5 py-4 text-slate-600 dark:text-slate-300">{formatDate(u.createdAt)}</td>
-                        <td className="px-5 py-4 text-slate-600 dark:text-slate-300">{formatDate(u.lastLogin)}</td>
-                        <td className="px-5 py-4 text-center">
+                        <td className="text-sm text-slate-500">{formatDate(u.createdAt)}</td>
+                        <td className="text-sm text-slate-500">{formatDate(u.lastLogin)}</td>
+                        <td className="text-center">
                           <button
                             onClick={() => handleDeleteClick(u)}
                             disabled={u.id === user?.id}
-                            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                               u.id === user?.id
                                 ? 'cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500'
                                 : 'bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40'
                             }`}
                           >
-                            <Trash2 size={13} /> Supprimer
+                            <Trash2 size={12} /> Supprimer
                           </button>
                         </td>
                       </tr>
@@ -186,21 +189,21 @@ export default function AdminManageUsersPage() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between">
               <button
-                className="btn btn-primary"
+                className="btn btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
                 onClick={() => setPage(Math.max(0, page - 1))}
                 disabled={page === 0}
               >
-                <ChevronLeft size={16} className="inline -mt-0.5" /> Précédent
+                <ChevronLeft size={15} /> Précédent
               </button>
-              <span className="text-sm text-slate-600 dark:text-slate-400 font-medium">
+              <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
                 Page {page + 1} / {totalPages}
               </span>
               <button
-                className="btn btn-primary"
+                className="btn btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
                 onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
                 disabled={page === totalPages - 1}
               >
-                Suivant <ChevronRight size={16} className="inline -mt-0.5" />
+                Suivant <ChevronRight size={15} />
               </button>
             </div>
           )}
@@ -208,14 +211,20 @@ export default function AdminManageUsersPage() {
       )}
 
       {showDeleteModal && userToDelete && (
-        <Modal open={true} title="Confirmer la suppression" onClose={() => setShowDeleteModal(false)}>
+        <Modal
+          open
+          title="Confirmer la suppression"
+          onClose={() => setShowDeleteModal(false)}
+        >
           <div className="space-y-4">
             <p className="text-sm text-slate-600 dark:text-slate-300">
               Supprimer l'utilisateur{' '}
-              <span className="font-semibold text-slate-800 dark:text-slate-100">{userToDelete.email}</span> ?
+              <span className="font-bold text-slate-800 dark:text-slate-100">{userToDelete.email}</span> ?
             </p>
-            <p className="text-sm text-red-600 dark:text-red-400 font-medium">Cette action est irréversible.</p>
-            <div className="flex justify-end gap-3">
+            <p className="text-sm font-semibold text-red-600 dark:text-red-400">
+              Cette action est irréversible.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
               <button
                 className="btn btn-primary"
                 onClick={() => setShowDeleteModal(false)}
@@ -224,11 +233,11 @@ export default function AdminManageUsersPage() {
                 Annuler
               </button>
               <button
-                className="bg-red-600 text-white hover:bg-red-700 rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
                 onClick={confirmDelete}
                 disabled={deleting}
               >
-                {deleting ? 'Suppression...' : 'Supprimer'}
+                <Trash2 size={14} /> {deleting ? 'Suppression...' : 'Supprimer'}
               </button>
             </div>
           </div>
