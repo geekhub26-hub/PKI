@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import * as tmImage from '@teachablemachine/image';
-import { Camera, RefreshCw, CheckCircle } from 'lucide-react';
+import {
+  Camera, RefreshCw, CheckCircle, User, Building2,
+  CreditCard, FileText, KeyRound, Upload,
+} from 'lucide-react';
 import { userService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { notify } from '../utils/notify';
@@ -64,30 +67,24 @@ export default function UserGenerateCsrPage() {
     setCountry('CM');
   }, [user]);
 
-  useEffect(() => {
-    setStep(isCsrMode ? 3 : 1);
-  }, [isCsrMode]);
+  useEffect(() => { setStep(isCsrMode ? 3 : 1); }, [isCsrMode]);
 
   useEffect(() => {
     let cancelled = false;
     const loadModel = async () => {
-      setAiStatus('loading');
-      setAiError(null);
+      setAiStatus('loading'); setAiError(null);
       try {
         const model = await tmImage.load('/ai/id-model/model.json', '/ai/id-model/metadata.json');
         if (cancelled) return;
-        setAiModel(model);
-        setAiStatus('ready');
-      } catch (e) {
+        setAiModel(model); setAiStatus('ready');
+      } catch {
         if (cancelled) return;
         setAiStatus('error');
-        setAiError("Le modele IA n'a pas pu etre charge.");
+        setAiError("Le modèle IA n'a pas pu être chargé.");
       }
     };
     loadModel();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   const fileKey = (f: File) => `${f.name}-${f.size}-${f.lastModified}`;
@@ -96,19 +93,13 @@ export default function UserGenerateCsrPage() {
     new Promise<HTMLImageElement>((resolve, reject) => {
       const url = URL.createObjectURL(file);
       const img = new Image();
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        resolve(img);
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        reject(new Error('Image invalide'));
-      };
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image invalide')); };
       img.src = url;
     });
 
   const validateWithAi = async (file: File) => {
-    if (!aiModel) throw new Error('Modele non disponible');
+    if (!aiModel) throw new Error('Modèle non disponible');
     const img = await loadImage(file);
     const predictions: tmImage.Prediction[] = await aiModel.predict(img);
     const best = predictions.reduce<tmImage.Prediction>(
@@ -130,11 +121,9 @@ export default function UserGenerateCsrPage() {
       const arr = Array.from(selected);
       const allowed = arr.filter((f) => /png|jpe?g|pdf/.test(f.type));
       const rejected = arr.filter((f) => !/png|jpe?g|pdf/.test(f.type)).map((f) => f.name);
-      if (rejected.length) {
-        setError(`Format non pris en charge: ${rejected.join(', ')}`);
-      }
+      if (rejected.length) setError(`Format non pris en charge: ${rejected.join(', ')}`);
 
-      const requestId = ++aiRequestIdRef.current;
+      const reqId = ++aiRequestIdRef.current;
       const nextResults: Record<string, { label: string; score: number; ok: boolean }> = {};
       const accepted: File[] = [];
       const invalid: string[] = [];
@@ -142,12 +131,10 @@ export default function UserGenerateCsrPage() {
       for (const file of allowed) {
         if (file.type === 'application/pdf') {
           nextResults[fileKey(file)] = { label: 'PDF', score: 1, ok: true };
-          accepted.push(file);
-          continue;
+          accepted.push(file); continue;
         }
         if (aiStatus !== 'ready' || !aiModel) {
-          invalid.push(`${file.name} (modele IA image indisponible)`);
-          continue;
+          invalid.push(`${file.name} (modèle IA indisponible)`); continue;
         }
         try {
           const result = await validateWithAi(file);
@@ -160,10 +147,10 @@ export default function UserGenerateCsrPage() {
         }
       }
 
-      if (requestId !== aiRequestIdRef.current) return;
+      if (reqId !== aiRequestIdRef.current) return;
       setAiResults((prev) => ({ ...prev, ...nextResults }));
       if (invalid.length) {
-        setError(`Seules les pieces d'identite CNI/Passeport sont acceptees. Fichiers non valides: ${invalid.join(', ')}`);
+        setError(`Seules les pièces CNI/Passeport sont acceptées. Fichiers non valides: ${invalid.join(', ')}`);
       }
       setFiles((prev) => [...prev, ...accepted].slice(0, 5));
     },
@@ -171,32 +158,25 @@ export default function UserGenerateCsrPage() {
   );
 
   const onDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setDragOver(false);
-      onFiles(e.dataTransfer.files);
-    },
+    (e: React.DragEvent) => { e.preventDefault(); setDragOver(false); onFiles(e.dataTransfer.files); },
     [onFiles]
   );
 
   const onBrowse = () => fileInputRef.current?.click();
 
   const startCamera = async () => {
-    setCameraError(null);
-    setVideoReady(false);
+    setCameraError(null); setVideoReady(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
       });
       streamRef.current = stream;
-      // Ne pas assigner srcObject ici — on attend que le <video> soit dans le DOM (useEffect ci-dessous)
       setCameraActive(true);
     } catch {
       setCameraError("Impossible d'accéder à la caméra. Vérifiez les permissions du navigateur.");
     }
   };
 
-  // Assigne srcObject après que <video> est rendu dans le DOM
   useEffect(() => {
     if (cameraActive && streamRef.current && videoRef.current) {
       videoRef.current.srcObject = streamRef.current;
@@ -207,20 +187,17 @@ export default function UserGenerateCsrPage() {
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
-    setCameraActive(false);
-    setVideoReady(false);
+    setCameraActive(false); setVideoReady(false);
   };
 
   const captureSelfie = () => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    // requestAnimationFrame garantit qu'on capture après que le navigateur a rendu un vrai frame
     requestAnimationFrame(() => {
       const w = video.videoWidth || 640;
       const h = video.videoHeight || 480;
-      canvas.width = w;
-      canvas.height = h;
+      canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       ctx.drawImage(video, 0, 0, w, h);
@@ -238,8 +215,7 @@ export default function UserGenerateCsrPage() {
 
   const retakeSelfie = () => {
     if (selfiePreviewUrl) URL.revokeObjectURL(selfiePreviewUrl);
-    setSelfiePreviewUrl(null);
-    setSelfieFile(null);
+    setSelfiePreviewUrl(null); setSelfieFile(null);
     startCamera();
   };
 
@@ -250,20 +226,12 @@ export default function UserGenerateCsrPage() {
   }, []);
 
   const onSelectCsrFile = (f: File | null) => {
-    if (!f) {
-      setCsrFile(null);
-      return;
-    }
-    if (f.size > 200 * 1024) {
-      setError('Fichier CSR trop volumineux (>200KB)');
-      return;
-    }
+    if (!f) { setCsrFile(null); return; }
+    if (f.size > 200 * 1024) { setError('Fichier CSR trop volumineux (>200KB)'); return; }
     if (!(/\.pem$|\.csr$|text\/|application\/x-pem-file/.test(f.name) || /text\//.test(f.type))) {
-      setError('Type de fichier CSR non pris en charge');
-      return;
+      setError('Type de fichier CSR non pris en charge'); return;
     }
-    setCsrFile(f);
-    setError(null);
+    setCsrFile(f); setError(null);
   };
 
   const removeFile = (idx: number) =>
@@ -271,25 +239,21 @@ export default function UserGenerateCsrPage() {
       const next = prev.filter((_, i) => i !== idx);
       const removed = prev[idx];
       if (removed) {
-        setAiResults((curr) => {
-          const copy = { ...curr };
-          delete copy[fileKey(removed)];
-          return copy;
-        });
+        setAiResults((curr) => { const copy = { ...curr }; delete copy[fileKey(removed)]; return copy; });
       }
       return next;
     });
   const removeCsrFile = () => setCsrFile(null);
 
   const validatePersonalStep = () => {
-    if (!firstName.trim()) return 'Le prenom est requis';
+    if (!firstName.trim()) return 'Le prénom est requis';
     if (!lastName.trim()) return 'Le nom est requis';
     if (!birthDate.trim()) return 'La date de naissance est requise';
     if (!birthPlace.trim()) return 'Le lieu de naissance est requis';
-    if (!nationality.trim()) return 'La nationalite est requise';
-    if (!identityDocumentType.trim()) return "Le type de piece d'identite est requis";
-    if (!identityDocumentNumber.trim()) return "Le numero de piece d'identite est requis";
-    if (!identityDocumentExpiry.trim()) return "La date d'expiration de la piece est requise";
+    if (!nationality.trim()) return 'La nationalité est requise';
+    if (!identityDocumentType.trim()) return "Le type de pièce d'identité est requis";
+    if (!identityDocumentNumber.trim()) return "Le numéro de pièce d'identité est requis";
+    if (!identityDocumentExpiry.trim()) return "La date d'expiration de la pièce est requise";
     if (!emailAddr.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailAddr.trim())) return 'Un email valide est requis';
     if (!organization.trim()) return "L'organisation (O) est requise";
     if (!locality.trim()) return 'La ville (L) est requise';
@@ -297,7 +261,7 @@ export default function UserGenerateCsrPage() {
   };
 
   const validateIdentityStep = () => {
-    if (files.length === 0) return "Veuillez ajouter au moins une piece d'identite avant de continuer.";
+    if (files.length === 0) return "Veuillez ajouter au moins une pièce d'identité avant de continuer.";
     if (!selfieFile) return 'Veuillez ajouter un selfie pour la comparaison.';
     return null;
   };
@@ -306,7 +270,7 @@ export default function UserGenerateCsrPage() {
     if (!commonName.trim()) return 'Le Common Name (CN) est requis';
     if (!organization.trim()) return "L'organisation (O) est requise";
     if (!locality.trim()) return 'La ville (L) est requise';
-    if (!country.trim() || !/^[A-Za-z]{2}$/.test(country.trim())) return 'Le pays (C) doit etre un code ISO 2 lettres';
+    if (!country.trim() || !/^[A-Za-z]{2}$/.test(country.trim())) return 'Le pays (C) doit être un code ISO 2 lettres';
     if (!emailAddr.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailAddr.trim())) return 'Un email valide est requis';
     if (csrModeChoice === 'paste' && !csrText.trim()) return 'Collez le CSR au format PEM.';
     if (csrModeChoice === 'upload' && !csrFile) return 'Ajoutez un fichier CSR.';
@@ -317,20 +281,13 @@ export default function UserGenerateCsrPage() {
     setError(null);
     if (isCsrMode) return;
     if (step === 1) {
-      const validation = validatePersonalStep();
-      if (validation) {
-        setError(validation);
-        return;
-      }
-      setStep(2);
-      return;
+      const v = validatePersonalStep();
+      if (v) { setError(v); return; }
+      setStep(2); return;
     }
     if (step === 2) {
-      const validation = validateIdentityStep();
-      if (validation) {
-        setError(validation);
-        return;
-      }
+      const v = validateIdentityStep();
+      if (v) { setError(v); return; }
       setStep(3);
     }
   };
@@ -347,27 +304,24 @@ export default function UserGenerateCsrPage() {
       if (csrModeChoice === 'generateLater') return onGenerateCsr();
       if (csrModeChoice === 'paste' && !csrText.trim()) return setError('Collez le CSR au format PEM.');
       if (csrModeChoice === 'upload' && !csrFile) return setError('Ajoutez un fichier CSR.');
-
       setSubmitting(true);
       try {
         const form = new FormData();
         if (csrModeChoice === 'paste' && csrText.trim()) form.append('csr', csrText.trim());
         else if (csrModeChoice === 'upload' && csrFile) form.append('csrFile', csrFile);
         await userService.submitRequestCsr(requestId, form);
-        notify('success', 'CSR soumis avec succes. La demande repasse en verification finale admin.');
+        notify('success', 'CSR soumis avec succès. La demande repasse en vérification finale admin.');
         navigate('/requests');
       } catch (err: any) {
         setError(err?.response?.data?.message || err?.response?.data?.error || 'Erreur lors de la soumission du CSR.');
-      } finally {
-        setSubmitting(false);
-      }
+      } finally { setSubmitting(false); }
       return;
     }
 
-    const personalValidation = validatePersonalStep();
-    if (personalValidation) return setError(personalValidation);
-    const identityValidation = validateIdentityStep();
-    if (identityValidation) return setError(identityValidation);
+    const pv = validatePersonalStep();
+    if (pv) return setError(pv);
+    const iv = validateIdentityStep();
+    if (iv) return setError(iv);
 
     setSubmitting(true);
     try {
@@ -392,169 +346,195 @@ export default function UserGenerateCsrPage() {
       if (csrModeChoice === 'paste' && csrText.trim()) form.append('csr', csrText.trim());
       else if (csrModeChoice === 'upload' && csrFile) form.append('csrFile', csrFile);
       await userService.submitCertificateRequest(form);
-      notify('success', 'Demande soumise pour verification admin.');
+      notify('success', 'Demande soumise pour vérification admin.');
       navigate('/requests');
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.response?.data?.error || 'Erreur lors de la soumission.');
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setSubmitting(false); }
   };
 
   const onGenerateCsr = async () => {
     setError(null);
-    if (!requestId) return setError('La generation CSR est disponible apres creation et validation admin de la demande.');
-    const validation = validateCertificateStep();
-    if (validation && validation !== 'Collez le CSR au format PEM.' && validation !== 'Ajoutez un fichier CSR.') {
-      return setError(validation);
-    }
+    if (!requestId) return setError('La génération CSR est disponible après création et validation admin de la demande.');
+    const v = validateCertificateStep();
+    if (v && v !== 'Collez le CSR au format PEM.' && v !== 'Ajoutez un fichier CSR.') return setError(v);
     setSubmitting(true);
     try {
       await userService.generateAndSubmitRequestCsr(requestId, {
-        cn: commonName.trim(),
-        o: organization.trim(),
+        cn: commonName.trim(), o: organization.trim(),
         ou: organizationalUnit.trim() || undefined,
-        l: locality.trim(),
-        st: stateRegion.trim() || undefined,
-        c: country.trim().toUpperCase(),
-        email: emailAddr.trim() || undefined,
+        l: locality.trim(), st: stateRegion.trim() || undefined,
+        c: country.trim().toUpperCase(), email: emailAddr.trim() || undefined,
       });
-      notify('success', 'CSR genere et soumis avec succes.');
+      notify('success', 'CSR généré et soumis avec succès.');
       navigate('/requests');
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.response?.data?.error || 'Erreur lors de la generation du CSR.');
-    } finally {
-      setSubmitting(false);
-    }
+      setError(err?.response?.data?.message || err?.response?.data?.error || 'Erreur lors de la génération du CSR.');
+    } finally { setSubmitting(false); }
   };
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 py-6">
-      <header className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      {/* Header */}
+      <div className="page-header-bar">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-h3 font-semibold text-[var(--text-1)]">Nouvelle demande</h1>
-            <div className="mt-1 text-sm text-[var(--text-3)]">
+            <p className="mb-1 text-xs font-bold uppercase tracking-widest text-white/50">PKI ANTIC</p>
+            <h1 className="text-2xl font-bold text-white">
+              {isCsrMode ? 'Soumettre mon CSR' : 'Nouvelle demande de certificat'}
+            </h1>
+            <p className="mt-0.5 text-sm text-white/60">
               {isCsrMode
-                ? 'Etape CSR - Demande validee par admin'
-                : `Etape ${step}/${lastStep} - ${
-                    step === 1 ? 'Informations personnelles' : step === 2 ? "Piece d'identite et selfie" : 'Entreprise et CSR'
+                ? 'Étape CSR — Demande validée par l\'administrateur'
+                : `Étape ${step}/${lastStep} — ${
+                    step === 1 ? 'Informations personnelles'
+                    : step === 2 ? "Pièce d'identité et selfie"
+                    : 'Entreprise et CSR'
                   }`}
-            </div>
+            </p>
           </div>
-          <div className={`grid gap-2 ${isCsrMode ? 'grid-cols-1' : 'grid-cols-3'}`}>
-            {!isCsrMode && <StepBadge active={step === 1} done={step > 1} label="1. Personnel" />}
-            {!isCsrMode && <StepBadge active={step === 2} done={false} label="2. Identité & docs" />}
-            {!isCsrMode && <StepBadge active={false} done={false} label="3. CSR (admin requis)" locked />}
+          {/* Step badges */}
+          <div className={`flex gap-2 ${isCsrMode ? '' : ''}`}>
+            {!isCsrMode && (
+              <>
+                <StepBadge active={step === 1} done={step > 1} label="1. Personnel" />
+                <StepBadge active={step === 2} done={false} label="2. Identité" />
+                <StepBadge active={false} done={false} label="3. CSR" locked />
+              </>
+            )}
             {isCsrMode && <StepBadge active={step === 3} done={false} label="CSR autorisé" />}
           </div>
         </div>
-      </header>
+      </div>
 
+      {/* STEP 1 — Personal info */}
       {step === 1 && (
-        <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-          <h2 className="mb-3 text-h3 font-semibold dark:text-neutral-100">Informations personnelles</h2>
-          <div className="mb-4 text-sm text-neutral-500 dark:text-neutral-400">
-            Renseignez l'identite du demandeur. Ces informations seront comparees avec la piece fournie a l'etape suivante.
+        <div className="pki-card p-6">
+          <div className="section-title">
+            <div className="flex items-center gap-2">
+              <User size={15} className="text-blue-500" />
+              <span>Informations personnelles</span>
+            </div>
           </div>
-
+          <p className="mb-5 text-sm text-slate-500 dark:text-slate-400">
+            Renseignez l'identité du demandeur. Ces informations seront comparées avec la pièce fournie à l'étape suivante.
+          </p>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field label="Prenom *" value={firstName} onChange={setFirstName} placeholder="Japhet" />
+            <Field label="Prénom *" value={firstName} onChange={setFirstName} placeholder="Japhet" />
             <Field label="Nom *" value={lastName} onChange={setLastName} placeholder="Fadil" />
             <Field label="Date de naissance *" value={birthDate} onChange={setBirthDate} placeholder="1995-01-31" type="date" />
-            <Field label="Lieu de naissance *" value={birthPlace} onChange={setBirthPlace} placeholder="Yaounde" />
-            <Field label="Nationalite * (code 2 lettres)" value={nationality} onChange={(v) => setNationality(v.toUpperCase().slice(0, 2))} placeholder="CM" help="Ex: CM, FR, US" />
-            <Field label="Email *" value={emailAddr} onChange={setEmailAddr} placeholder="japhet.fadil@organisation.fr" wide />
-            <Field label="Type de piece *" value={identityDocumentType} onChange={(v) => setIdentityDocumentType(v.toUpperCase())} placeholder="CNI ou PASSPORT" />
-            <Field label="Numero de piece *" value={identityDocumentNumber} onChange={setIdentityDocumentNumber} placeholder="123456789" />
-            <Field label="Expiration de la piece *" value={identityDocumentExpiry} onChange={setIdentityDocumentExpiry} placeholder="2030-12-31" type="date" />
-            <Field label="Organisation (O) *" value={organization} onChange={setOrganization} placeholder="Ministere de l'Interieur" help="Votre organisation ou employeur" />
-            <Field label="Ville (L) *" value={locality} onChange={setLocality} placeholder="Yaounde" />
+            <Field label="Lieu de naissance *" value={birthPlace} onChange={setBirthPlace} placeholder="Yaoundé" />
+            <Field label="Nationalité * (code 2 lettres)" value={nationality} onChange={(v) => setNationality(v.toUpperCase().slice(0, 2))} placeholder="CM" help="Ex: CM, FR, US" />
+            <Field label="Email *" value={emailAddr} onChange={setEmailAddr} placeholder="japhet.fadil@organisation.cm" wide />
+            <Field label="Type de pièce *" value={identityDocumentType} onChange={(v) => setIdentityDocumentType(v.toUpperCase())} placeholder="CNI ou PASSPORT" />
+            <Field label="Numéro de pièce *" value={identityDocumentNumber} onChange={setIdentityDocumentNumber} placeholder="123456789" />
+            <Field label="Expiration de la pièce *" value={identityDocumentExpiry} onChange={setIdentityDocumentExpiry} placeholder="2030-12-31" type="date" />
+            <Field label="Organisation (O) *" value={organization} onChange={setOrganization} placeholder="Ministère de l'Intérieur" help="Votre organisation ou employeur" />
+            <Field label="Ville (L) *" value={locality} onChange={setLocality} placeholder="Yaoundé" />
           </div>
         </div>
       )}
 
+      {/* STEP 2 — Identity docs + selfie */}
       {step === 2 && (
-        <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-          <h2 className="mb-2 text-h3 font-semibold dark:text-neutral-100">Piece d'identite et selfie</h2>
-          <div className="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
-            Importez votre piece d'identite, puis ajoutez un selfie clair du demandeur pour la comparaison.
+        <div className="pki-card p-6">
+          <div className="section-title">
+            <div className="flex items-center gap-2">
+              <CreditCard size={15} className="text-amber-500" />
+              <span>Pièce d'identité et selfie</span>
+            </div>
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+              aiStatus === 'ready' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+              : aiStatus === 'loading' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+              : 'bg-slate-100 text-slate-500 dark:bg-slate-800'
+            }`}>
+              IA {aiStatus === 'loading' ? 'chargement…' : aiStatus === 'ready' ? 'active' : 'indisponible'}
+              {aiError ? ` (${aiError})` : ''}
+            </span>
           </div>
-          <div className="mb-3 text-xs text-neutral-500 dark:text-neutral-400">
-            IA navigateur: {aiStatus === 'loading' ? 'chargement du modele...' : aiStatus === 'ready' ? 'active pour images' : 'indisponible'}
-            {aiError ? ` - ${aiError}` : ''}
-          </div>
+          <p className="mb-5 text-sm text-slate-500 dark:text-slate-400">
+            Importez votre pièce d'identité (CNI ou passeport), puis prenez un selfie pour la comparaison.
+          </p>
 
+          {/* Drop zone */}
           <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={onDrop}
-            className={`rounded-lg border-2 p-12 text-center ${
+            onClick={onBrowse}
+            className={`mb-5 cursor-pointer rounded-2xl border-2 border-dashed p-10 text-center transition ${
               dragOver
-                ? 'border-dashed border-primary-600 bg-primary-50 dark:bg-primary-950/30'
-                : 'border-dashed border-neutral-300 dark:border-neutral-700'
+                ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-950/30'
+                : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50 dark:border-slate-600 dark:hover:border-blue-400 dark:hover:bg-slate-800/30'
             }`}
           >
-            <div className="font-semibold dark:text-neutral-100">Glissez-deposez vos fichiers ici</div>
-            <div className="mb-3 text-sm text-neutral-500 dark:text-neutral-400">
-              ou{' '}
-              <button className="text-primary-700 underline dark:text-primary-300" onClick={onBrowse}>
-                cliquez pour selectionner
-              </button>
-            </div>
-            <button onClick={onBrowse} className="mt-2 inline-block rounded-lg border-2 border-primary-700 px-4 py-2 text-primary-700 dark:border-primary-300 dark:text-primary-300">
-              Parcourir les fichiers
-            </button>
-            <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => onFiles(e.target.files)} accept="image/png,image/jpeg,application/pdf" />
+            <Upload size={28} className="mx-auto mb-3 text-slate-400" />
+            <p className="font-semibold text-slate-700 dark:text-slate-200">
+              Glissez-déposez vos fichiers ici
+            </p>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              ou cliquez pour sélectionner — PNG, JPEG, PDF (max 5 fichiers)
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => onFiles(e.target.files)}
+              accept="image/png,image/jpeg,application/pdf"
+            />
           </div>
 
+          {/* Files list */}
           {files.length > 0 && (
-            <div className="mt-4">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Pieces ajoutees</div>
-              <ul className="space-y-2">
-                {files.map((f, idx) => (
-                  <li key={idx} className="flex items-center justify-between rounded bg-neutral-50 p-3 dark:bg-neutral-800">
-                    <div className="text-sm dark:text-neutral-200">
-                      {f.name} <span className="text-xs text-neutral-400 dark:text-neutral-500">({Math.round(f.size / 1024)} KB)</span>
-                      {aiResults[fileKey(f)] && (
-                        <span
-                          className={`ml-2 rounded-full px-2 py-0.5 text-xs ${
-                            aiResults[fileKey(f)].ok
-                              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                              : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                          }`}
-                        >
-                          {aiResults[fileKey(f)].label} - {Math.round(aiResults[fileKey(f)].score * 100)}%
+            <div className="mb-5 space-y-2">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Pièces ajoutées ({files.length})</p>
+              {files.map((f, idx) => {
+                const ai = aiResults[fileKey(f)];
+                return (
+                  <div key={idx} className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <FileText size={14} className="shrink-0 text-slate-400" />
+                      <span className="truncate text-sm text-slate-700 dark:text-slate-300">{f.name}</span>
+                      <span className="text-xs text-slate-400">({Math.round(f.size / 1024)} KB)</span>
+                      {ai && (
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          ai.ok ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                               : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                        }`}>
+                          {ai.label} — {Math.round(ai.score * 100)}%
                         </span>
                       )}
                     </div>
-                    <button className="text-sm text-red-600" onClick={() => removeFile(idx)}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); removeFile(idx); }}
+                      className="ml-3 shrink-0 text-xs font-semibold text-rose-600 hover:text-rose-800"
+                    >
                       Supprimer
                     </button>
-                  </li>
-                ))}
-              </ul>
+                  </div>
+                );
+              })}
             </div>
           )}
 
-          {/* Webcam selfie */}
+          {/* Selfie section */}
           <canvas ref={canvasRef} className="hidden" />
-          <div className="mt-6 rounded-lg border border-neutral-200 p-4 dark:border-neutral-700">
-            <div className="mb-1 font-semibold dark:text-neutral-100">Selfie en direct *</div>
-            <div className="mb-3 text-sm text-neutral-500 dark:text-neutral-400">
-              Prenez un selfie avec votre caméra. Votre visage sera comparé à celui de votre pièce d'identité.
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
+            <div className="section-title">
+              <div className="flex items-center gap-2">
+                <Camera size={15} className="text-blue-500" />
+                <span>Selfie en direct *</span>
+              </div>
+              {selfieFile && <span className="status-badge status-active">Capturé</span>}
             </div>
+            <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+              Prenez un selfie avec votre caméra. Votre visage sera comparé à celui de votre pièce d'identité.
+            </p>
 
             {!cameraActive && !selfiePreviewUrl && (
-              <button
-                type="button"
-                onClick={startCamera}
-                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700"
-              >
-                <Camera size={16} /> Activer la caméra
+              <button type="button" onClick={startCamera} className="btn btn-primary">
+                <Camera size={14} /> Activer la caméra
               </button>
             )}
 
@@ -570,22 +550,19 @@ export default function UserGenerateCsrPage() {
                   muted
                   playsInline
                   onCanPlay={() => setVideoReady(true)}
-                  className="w-full max-w-sm rounded-xl border border-neutral-200 dark:border-neutral-700 scale-x-[-1]"
+                  className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 scale-x-[-1]"
                 />
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={captureSelfie}
                     disabled={!videoReady}
-                    className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="btn btn-green disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Camera size={15} /> {videoReady ? 'Prendre le selfie' : 'Initialisation…'}
+                    <Camera size={14} />
+                    {videoReady ? 'Prendre le selfie' : 'Initialisation…'}
                   </button>
-                  <button
-                    type="button"
-                    onClick={stopCamera}
-                    className="rounded-lg border border-neutral-300 px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300"
-                  >
+                  <button type="button" onClick={stopCamera} className="btn btn-primary" style={{ background: 'transparent', border: '2px solid', color: 'inherit' }}>
                     Annuler
                   </button>
                 </div>
@@ -598,17 +575,13 @@ export default function UserGenerateCsrPage() {
                   <img
                     src={selfiePreviewUrl}
                     alt="Selfie capturé"
-                    className="w-full max-w-sm rounded-xl border border-neutral-200 dark:border-neutral-700"
+                    className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700"
                   />
                   <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">
                     <CheckCircle size={12} /> Selfie capturé
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={retakeSelfie}
-                  className="flex items-center gap-2 rounded-lg border border-neutral-300 px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300"
-                >
+                <button type="button" onClick={retakeSelfie} className="btn btn-primary">
                   <RefreshCw size={14} /> Reprendre
                 </button>
               </div>
@@ -617,69 +590,79 @@ export default function UserGenerateCsrPage() {
         </div>
       )}
 
+      {/* STEP 3 — CSR */}
       {step === 3 && isCsrMode && (
-        <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-          <h2 className="mb-2 text-h3 font-semibold dark:text-neutral-100">Entreprise et CSR</h2>
-          <div className="mb-3 text-sm text-neutral-500 dark:text-neutral-400">
-            Renseignez les informations du certificat, puis fournissez le CSR par saisie, fichier ou generation apres validation admin.
+        <div className="pki-card p-6">
+          <div className="section-title">
+            <div className="flex items-center gap-2">
+              <Building2 size={15} className="text-emerald-500" />
+              <span>Entreprise et CSR</span>
+            </div>
           </div>
+          <p className="mb-5 text-sm text-slate-500 dark:text-slate-400">
+            Renseignez les informations du certificat, puis fournissez le CSR par saisie, fichier ou génération automatique.
+          </p>
 
           <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field label="Common Name (CN) *" value={commonName} onChange={setCommonName} placeholder="Japhet Fadil" help="Nom qui apparaitra sur le certificat" />
-            <Field label="Organisation (O) *" value={organization} onChange={setOrganization} placeholder="Ministere de l'Interieur" />
-            <Field label="Unite Organisationnelle (OU)" value={organizationalUnit} onChange={setOrganizationalUnit} placeholder="Direction des Systemes d'Information" />
-            <Field label="Ville (L) *" value={locality} onChange={setLocality} placeholder="Yaounde" />
-            <Field label="Region / Etat (ST)" value={stateRegion} onChange={setStateRegion} placeholder="Centre" />
+            <Field label="Common Name (CN) *" value={commonName} onChange={setCommonName} placeholder="Japhet Fadil" help="Nom qui apparaîtra sur le certificat" />
+            <Field label="Organisation (O) *" value={organization} onChange={setOrganization} placeholder="Ministère de l'Intérieur" />
+            <Field label="Unité Organisationnelle (OU)" value={organizationalUnit} onChange={setOrganizationalUnit} placeholder="Direction des Systèmes d'Information" />
+            <Field label="Ville (L) *" value={locality} onChange={setLocality} placeholder="Yaoundé" />
+            <Field label="Région / État (ST)" value={stateRegion} onChange={setStateRegion} placeholder="Centre" />
             <Field label="Pays (C) *" value={country} onChange={(v) => setCountry(v.toUpperCase())} placeholder="CM" help="Code pays ISO 3166-1 (2 lettres)" />
-            <Field label="Email certificat *" value={emailAddr} onChange={setEmailAddr} placeholder="japhet.fadil@organisation.fr" wide />
+            <Field label="Email certificat *" value={emailAddr} onChange={setEmailAddr} placeholder="japhet.fadil@organisation.cm" wide />
           </div>
 
-          <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-3">
-            <ChoiceButton active={csrModeChoice === 'paste'} onClick={() => setCsrModeChoice('paste')} label="Ecrire le CSR" />
-            <ChoiceButton active={csrModeChoice === 'upload'} onClick={() => setCsrModeChoice('upload')} label="Televerser un CSR" />
-            <ChoiceButton active={csrModeChoice === 'generateLater'} onClick={() => setCsrModeChoice('generateLater')} label="Generer" />
+          {/* CSR mode choice */}
+          <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <ChoiceButton active={csrModeChoice === 'paste'} onClick={() => setCsrModeChoice('paste')} label="Écrire le CSR" icon={<FileText size={14} />} />
+            <ChoiceButton active={csrModeChoice === 'upload'} onClick={() => setCsrModeChoice('upload')} label="Téléverser un CSR" icon={<Upload size={14} />} />
+            <ChoiceButton active={csrModeChoice === 'generateLater'} onClick={() => setCsrModeChoice('generateLater')} label="Générer automatiquement" icon={<KeyRound size={14} />} />
           </div>
 
           {csrModeChoice === 'paste' && (
-            <div className="mb-4">
-              <textarea
-                className="h-36 w-full rounded border bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-                value={csrText}
-                onChange={(e) => setCsrText(e.target.value)}
-                placeholder={'-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----'}
-              />
-            </div>
+            <textarea
+              className="pki-input min-h-[160px] font-mono text-xs"
+              value={csrText}
+              onChange={(e) => setCsrText(e.target.value)}
+              placeholder={'-----BEGIN CERTIFICATE REQUEST-----\n…\n-----END CERTIFICATE REQUEST-----'}
+            />
           )}
 
           {csrModeChoice === 'upload' && (
-            <div>
-              <div className="mb-1 text-xs text-neutral-500 dark:text-neutral-400">Uploader un fichier CSR</div>
-              <div className="flex items-center gap-3">
-                <input ref={csrFileRef} type="file" className="hidden" accept=".csr,.pem,text/*" onChange={(e) => onSelectCsrFile(e.target.files ? e.target.files[0] : null)} />
-                <button className="rounded border px-4 py-2 dark:border-neutral-700 dark:text-neutral-200" onClick={() => csrFileRef.current?.click()}>
-                  {csrFile ? 'Remplacer le fichier CSR' : 'Choisir un fichier CSR'}
-                </button>
-                {csrFile && (
-                  <div className="text-sm text-neutral-700 dark:text-neutral-300">
-                    {csrFile.name}
-                    <button className="ml-3 text-red-600" onClick={removeCsrFile}>
-                      Supprimer
-                    </button>
-                  </div>
-                )}
-              </div>
+            <div className="flex items-center gap-3">
+              <input
+                ref={csrFileRef}
+                type="file"
+                className="hidden"
+                accept=".csr,.pem,text/*"
+                onChange={(e) => onSelectCsrFile(e.target.files ? e.target.files[0] : null)}
+              />
+              <button className="btn btn-primary" onClick={() => csrFileRef.current?.click()}>
+                <Upload size={14} />
+                {csrFile ? 'Remplacer' : 'Choisir un fichier CSR'}
+              </button>
+              {csrFile && (
+                <span className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                  {csrFile.name}
+                  <button className="text-rose-600 hover:text-rose-800 text-xs font-semibold" onClick={removeCsrFile}>
+                    Supprimer
+                  </button>
+                </span>
+              )}
             </div>
           )}
 
           {csrModeChoice === 'generateLater' && (
-            <div className="rounded-lg border border-primary-200 bg-primary-50 p-4 text-sm text-primary-900 dark:border-primary-900 dark:bg-primary-950/30 dark:text-primary-200">
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
               {isCsrMode
-                ? 'La demande est validee: vous pouvez generer le CSR automatiquement avec les informations ci-dessus.'
-                : "La generation automatique sera disponible apres validation admin. La demande partira d'abord en verification avec la piece et le selfie."}
+                ? 'La demande est validée : vous pouvez générer le CSR automatiquement avec les informations ci-dessus.'
+                : "La génération automatique sera disponible après validation admin."}
               {isCsrMode && (
                 <div className="mt-3">
-                  <button className="rounded-lg bg-primary-800 px-4 py-2 font-semibold text-white" onClick={onGenerateCsr} disabled={submitting}>
-                    Generer et soumettre le CSR
+                  <button className="btn btn-green" onClick={onGenerateCsr} disabled={submitting}>
+                    <KeyRound size={14} />
+                    {submitting ? 'Génération…' : 'Générer et soumettre le CSR'}
                   </button>
                 </div>
               )}
@@ -688,119 +671,113 @@ export default function UserGenerateCsrPage() {
         </div>
       )}
 
+      {/* CGU */}
       {step === lastStep && (
-        <div className="flex items-start gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-900">
+        <div className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 p-4">
           <input
             id="cgu"
             type="checkbox"
             checked={cguAccepted}
             onChange={(e) => setCguAccepted(e.target.checked)}
-            className="mt-0.5 h-4 w-4 cursor-pointer rounded border-gray-300 accent-primary-600"
+            className="mt-0.5 h-4 w-4 cursor-pointer rounded border-gray-300 accent-emerald-600"
           />
-          <label htmlFor="cgu" className="cursor-pointer text-sm text-neutral-600 dark:text-neutral-400">
+          <label htmlFor="cgu" className="cursor-pointer text-sm text-slate-600 dark:text-slate-400">
             J'ai lu et j'accepte les{' '}
-            <span className="font-semibold text-primary-700 dark:text-primary-400">Conditions Générales d'Utilisation</span>{' '}
-            et la <span className="font-semibold text-primary-700 dark:text-primary-400">Politique de Confidentialité</span> de la plateforme ANTIC PKI.
+            <span className="font-semibold text-blue-700 dark:text-blue-400">Conditions Générales d'Utilisation</span>{' '}
+            et la <span className="font-semibold text-blue-700 dark:text-blue-400">Politique de Confidentialité</span> de la plateforme ANTIC PKI.
           </label>
         </div>
       )}
 
+      {/* Error */}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700 dark:border-red-800/50 dark:bg-red-950/40 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
+      {/* Navigation buttons */}
       <div className="flex flex-wrap justify-end gap-3">
-        <button className="rounded-lg border-2 border-primary-700 px-6 py-3 text-primary-700 dark:border-primary-300 dark:text-primary-300" onClick={() => navigate('/dashboard')}>
+        <button
+          className="rounded-xl border-2 border-slate-300 dark:border-slate-600 px-6 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 transition hover:bg-slate-50 dark:hover:bg-slate-800/30"
+          onClick={() => navigate('/dashboard')}
+        >
           Annuler
         </button>
         {step > 1 && !isCsrMode && (
-          <button
-            className="rounded-lg border border-neutral-300 bg-white px-6 py-3 font-semibold text-neutral-800 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
-            onClick={goPrevious}
-            disabled={submitting}
-          >
-            Precedent
+          <button className="btn btn-primary" onClick={goPrevious} disabled={submitting}>
+            ← Précédent
           </button>
         )}
         {step < lastStep ? (
-          <button
-            className="rounded-lg bg-primary-800 px-6 py-3 font-semibold text-white"
-            onClick={goNext}
-            disabled={submitting}
-          >
-            Suivant
+          <button className="btn btn-green" onClick={goNext} disabled={submitting}>
+            Suivant →
           </button>
         ) : (
           <button
-            className="rounded-lg bg-primary-800 px-6 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn btn-green disabled:cursor-not-allowed disabled:opacity-50"
             onClick={onSubmit}
             disabled={submitting || !cguAccepted}
           >
-            {submitting ? 'Envoi...' : isCsrMode ? 'Soumettre le CSR' : 'Soumettre pour verification'}
+            <CheckCircle size={15} />
+            {submitting ? 'Envoi…' : isCsrMode ? 'Soumettre le CSR' : 'Soumettre pour vérification'}
           </button>
         )}
       </div>
-
-      {error && <div className="mt-4 text-red-600 dark:text-red-300">{error}</div>}
     </div>
   );
 }
 
 function StepBadge({ label, active, done, locked = false }: { label: string; active: boolean; done: boolean; locked?: boolean }) {
   return (
-    <div
-      className={`rounded-lg border px-3 py-2 text-center text-sm font-semibold ${
-        locked
-          ? 'border-neutral-200 bg-neutral-50 text-neutral-400 opacity-60 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-500'
-          : done
-            ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300'
-            : active
-              ? 'border-primary-300 bg-primary-50 text-primary-700 dark:border-primary-800 dark:bg-primary-950/30 dark:text-primary-300'
-              : 'border-neutral-200 bg-neutral-50 text-neutral-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400'
-      }`}
-    >
+    <div className={`rounded-xl border px-3 py-1.5 text-center text-xs font-bold ${
+      locked
+        ? 'border-slate-200 bg-slate-100/50 text-slate-400 opacity-60 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-500'
+        : done
+          ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300'
+          : active
+            ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300'
+            : 'border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400'
+    }`}>
       {locked ? '🔒 ' : ''}{label}
     </div>
   );
 }
 
-function ChoiceButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function ChoiceButton({ label, active, onClick, icon }: { label: string; active: boolean; onClick: () => void; icon?: React.ReactNode }) {
   return (
     <button
-      className={`rounded-lg border px-4 py-2 text-sm font-semibold ${
+      className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
         active
-          ? 'border-primary-300 bg-primary-50 text-primary-700 dark:border-primary-800 dark:bg-primary-950/30 dark:text-primary-300'
-          : 'border-neutral-200 bg-white text-neutral-700 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
+          ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-300'
+          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/30'
       }`}
       onClick={onClick}
     >
-      {label}
+      {icon} {label}
     </button>
   );
 }
 
 function Field({
-  label,
-  value,
-  onChange,
-  placeholder,
-  help,
-  type = 'text',
-  wide = false,
+  label, value, onChange, placeholder, help, type = 'text', wide = false,
 }: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-  help?: string;
-  type?: string;
-  wide?: boolean;
+  label: string; value: string; onChange: (v: string) => void;
+  placeholder: string; help?: string; type?: string; wide?: boolean;
 }) {
   return (
-    <label className={`flex flex-col ${wide ? 'md:col-span-2' : ''}`}>
-      <span className="mb-1 text-xs text-neutral-500 dark:text-neutral-400">{label}</span>
-      <input type={type} className="rounded border bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
-      {help && <div className="mt-1 text-xs text-neutral-400 dark:text-neutral-500">{help}</div>}
-    </label>
+    <div className={`flex flex-col ${wide ? 'md:col-span-2' : ''}`}>
+      <label className="mb-1.5 block text-xs font-bold uppercase tracking-widest text-slate-400">
+        {label}
+      </label>
+      <input
+        type={type}
+        className="pki-input"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+      {help && <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{help}</p>}
+    </div>
   );
 }
-
-
-
-
