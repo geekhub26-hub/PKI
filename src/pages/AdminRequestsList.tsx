@@ -1,26 +1,27 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminService } from '../services/api';
+import { Filter, ChevronRight } from 'lucide-react';
 
 export default function AdminRequestsList() {
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [requests, setRequests] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(10);
-  const [total, setTotal] = useState(0);
+  const [requests, setRequests]         = useState<any[]>([]);
+  const [loading, setLoading]           = useState(false);
+  const [error, setError]               = useState<string | null>(null);
+  const [page, setPage]                 = useState(1);
+  const [pageSize, setPageSize]         = useState<number>(10);
+  const [total, setTotal]               = useState(0);
   const navigate = useNavigate();
 
   const statusOptions = [
-    { value: 'ALL', label: 'Toutes' },
-    { value: 'PENDING', label: 'PENDING' },
-    { value: 'PENDING_REVIEW', label: 'PENDING_REVIEW' },
-    { value: 'REVIEW_APPROVED', label: 'REVIEW_APPROVED' },
-    { value: 'CSR_SUBMITTED', label: 'CSR_SUBMITTED' },
+    { value: 'ALL',              label: 'Toutes les demandes' },
+    { value: 'PENDING',          label: 'PENDING' },
+    { value: 'PENDING_REVIEW',   label: 'PENDING_REVIEW' },
+    { value: 'REVIEW_APPROVED',  label: 'REVIEW_APPROVED' },
+    { value: 'CSR_SUBMITTED',    label: 'CSR_SUBMITTED' },
     { value: 'NEEDS_CORRECTION', label: 'NEEDS_CORRECTION' },
-    { value: 'ISSUED', label: 'ISSUED' },
-    { value: 'REJECTED', label: 'REJECTED' },
+    { value: 'ISSUED',           label: 'ISSUED' },
+    { value: 'REJECTED',         label: 'REJECTED' },
   ];
 
   const load = async () => {
@@ -43,148 +44,155 @@ export default function AdminRequestsList() {
     }
   };
 
-  useEffect(() => {
-    setPage(1);
-    load();
-  }, [statusFilter, pageSize]);
+  useEffect(() => { setPage(1); load(); }, [statusFilter, pageSize]);
+  useEffect(() => { load(); }, [page]);
 
-  useEffect(() => {
-    load();
-  }, [page]);
-
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const totalPages  = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(Math.max(1, page), totalPages);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 py-6">
-      {/* Page header */}
-      <div className="page-header-bar flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Demandes de certificats</h1>
-          <p className="mt-1 text-sm text-white/70">
-            Analysez les dossiers entrants, appliquez les statuts et accédez aux demandes en un clic.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-center backdrop-blur-sm">
-            <div className="text-[11px] font-bold uppercase tracking-widest text-white/60">Total</div>
-            <div className="text-lg font-bold text-white">{total}</div>
+      {/* Header */}
+      <div className="page-header-bar">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="mb-1 text-xs font-bold uppercase tracking-widest text-white/50">Administration PKI</p>
+            <h1 className="text-2xl font-bold text-white">Demandes de certificats</h1>
+            <p className="mt-0.5 text-sm text-white/60">
+              Analysez les dossiers entrants, appliquez les statuts et accédez aux détails en un clic.
+            </p>
           </div>
-          <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-center backdrop-blur-sm">
-            <div className="text-[11px] font-bold uppercase tracking-widest text-white/60">Page</div>
-            <div className="text-lg font-bold text-white">
-              {currentPage} / {totalPages}
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl border border-white/20 bg-white/10 px-5 py-2.5 text-center">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-white/50">Total</div>
+              <div className="text-xl font-bold text-white">{total}</div>
+            </div>
+            <div className="rounded-xl border border-white/20 bg-white/10 px-5 py-2.5 text-center">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-white/50">Page</div>
+              <div className="text-xl font-bold text-white">{currentPage} / {totalPages}</div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Filter bar */}
-      <div className="pki-card p-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Filtre statut</span>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="pki-input py-1.5 text-sm"
-          >
-            {statusOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300">
-            {total} résultat(s)
-          </span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm text-slate-600 dark:text-slate-400">Affichage</span>
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(Number(e.target.value));
-              setPage(1);
-            }}
-            className="pki-input py-1.5 text-sm w-20"
-          >
-            <option value={5}>5</option>
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-          </select>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="btn btn-primary py-1.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+      <div className="pki-card p-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-slate-400">
+              <Filter size={12} /> Filtrer
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="pki-input py-1.5 text-sm"
+              style={{ width: 'auto', minWidth: '180px' }}
             >
-              Précédent
-            </button>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="btn btn-primary py-1.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Suivant
-            </button>
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+            {statusFilter !== 'ALL' && (
+              <span className="rounded-full bg-blue-100 dark:bg-blue-900/30 px-3 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                {total} résultat(s)
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 text-sm text-slate-500">
+              Affichage :
+              <select
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                className="pki-input py-1 text-sm"
+                style={{ width: '70px' }}
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-40"
+                style={{ padding: '6px 14px', fontSize: '13px' }}
+              >
+                ← Précédent
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-40"
+                style={{ padding: '6px 14px', fontSize: '13px' }}
+              >
+                Suivant →
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Content */}
       {loading ? (
-        <div className="pki-card p-6 text-sm text-slate-500 dark:text-slate-400">Chargement...</div>
+        <div className="pki-card flex items-center justify-center p-12">
+          <div className="h-7 w-7 animate-spin rounded-full border-2 border-slate-200 border-t-blue-500" />
+        </div>
       ) : error ? (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300">
           {error}
         </div>
       ) : (
-        <div className="space-y-4">
+        <>
           {/* Desktop table */}
           <div className="pki-card overflow-hidden hidden md:block">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800 text-[11px] font-bold uppercase tracking-widest text-slate-400">
+            <table className="pki-table">
+              <thead>
                 <tr>
-                  <th className="px-4 py-3">ID</th>
-                  <th className="px-4 py-3">Utilisateur</th>
-                  <th className="px-4 py-3">CN</th>
-                  <th className="px-4 py-3">Statut</th>
-                  <th className="px-4 py-3">Soumis</th>
-                  <th className="px-4 py-3">Actions</th>
+                  <th>ID</th>
+                  <th>Utilisateur</th>
+                  <th>Common Name</th>
+                  <th>Statut</th>
+                  <th>Soumis le</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {requests.map((r) => (
-                  <tr
-                    key={r.id}
-                    className="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors"
-                  >
-                    <td className="px-4 py-3 font-mono text-xs text-slate-600 dark:text-slate-300">{r.id}</td>
-                    <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{r.userEmail || r.userId}</td>
-                    <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{r.commonName || '-'}</td>
-                    <td className="px-4 py-3">
+                  <tr key={r.id}>
+                    <td>
+                      <span className="font-mono text-xs text-slate-500 dark:text-slate-400">
+                        {r.id.slice(0, 8)}…
+                      </span>
+                    </td>
+                    <td>
+                      <span className="text-sm font-medium">{r.userEmail || r.userId}</span>
+                    </td>
+                    <td>
+                      <span className="font-semibold">{r.commonName || '—'}</span>
+                    </td>
+                    <td>
                       <span className={getStatusClass(r.status)}>{r.status}</span>
                     </td>
-                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">
-                      {r.submittedAt ? new Date(r.submittedAt).toLocaleString() : '-'}
+                    <td>
+                      <span className="text-xs text-slate-500">
+                        {r.submittedAt ? new Date(r.submittedAt).toLocaleString('fr-FR') : '—'}
+                      </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       <button
                         onClick={() => navigate(`/admin/requests/${r.id}`)}
-                        className="btn btn-primary py-1 px-3 text-xs"
+                        className="inline-flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 transition hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-300"
                       >
-                        Voir
+                        Voir <ChevronRight size={12} />
                       </button>
                     </td>
                   </tr>
                 ))}
                 {requests.length === 0 && (
                   <tr>
-                    <td
-                      className="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400"
-                      colSpan={6}
-                    >
+                    <td colSpan={6} className="py-12 text-center text-sm text-slate-400">
                       Aucune demande trouvée.
                     </td>
                   </tr>
@@ -194,37 +202,38 @@ export default function AdminRequestsList() {
           </div>
 
           {/* Mobile cards */}
-          <div className="grid gap-4 md:hidden">
+          <div className="grid gap-3 md:hidden">
             {requests.map((r) => (
               <div key={r.id} className="pki-card p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
                     {r.commonName || 'Demande'}
-                  </div>
+                  </p>
                   <span className={getStatusClass(r.status)}>{r.status}</span>
                 </div>
-                <div className="text-xs font-mono text-slate-500 dark:text-slate-400 mb-1">{r.id}</div>
-                <div className="text-sm text-slate-700 dark:text-slate-200">{r.userEmail || r.userId}</div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  {r.submittedAt ? new Date(r.submittedAt).toLocaleString() : '-'}
-                </div>
+                <p className="font-mono text-xs text-slate-400">{r.id}</p>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{r.userEmail || r.userId}</p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  {r.submittedAt ? new Date(r.submittedAt).toLocaleString('fr-FR') : '—'}
+                </p>
                 <div className="mt-3">
                   <button
                     onClick={() => navigate(`/admin/requests/${r.id}`)}
-                    className="btn btn-primary py-1.5 px-4 text-xs"
+                    className="btn btn-primary"
+                    style={{ padding: '6px 14px', fontSize: '12px' }}
                   >
-                    Voir
+                    Voir le dossier <ChevronRight size={12} />
                   </button>
                 </div>
               </div>
             ))}
             {requests.length === 0 && (
-              <div className="pki-card p-6 text-center text-sm text-slate-500 dark:text-slate-400 border-dashed">
+              <div className="pki-card p-8 text-center text-sm text-slate-400">
                 Aucune demande trouvée.
               </div>
             )}
           </div>
-        </div>
+        </>
       )}
     </div>
   );
@@ -234,18 +243,12 @@ function getStatusClass(status?: string): string {
   const value = (status || 'INCONNU').toUpperCase();
   switch (value) {
     case 'PENDING':
-    case 'PENDING_REVIEW':
-      return 'status-badge status-pending';
-    case 'ISSUED':
-      return 'status-badge status-active';
-    case 'REJECTED':
-      return 'status-badge status-revoked';
-    case 'NEEDS_CORRECTION':
-      return 'status-badge status-rejected';
+    case 'PENDING_REVIEW':      return 'status-badge status-pending';
+    case 'ISSUED':              return 'status-badge status-active';
+    case 'REJECTED':            return 'status-badge status-revoked';
+    case 'NEEDS_CORRECTION':    return 'status-badge status-rejected';
     case 'REVIEW_APPROVED':
-    case 'CSR_SUBMITTED':
-      return 'status-badge status-pending';
-    default:
-      return 'status-badge status-pending';
+    case 'CSR_SUBMITTED':       return 'status-badge status-pending';
+    default:                    return 'status-badge status-pending';
   }
 }
