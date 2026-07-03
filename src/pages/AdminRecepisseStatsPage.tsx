@@ -146,7 +146,7 @@ export default function AdminRecepisseStatsPage() {
         <div className="kpi-card purple">
           <div className="kpi-icon purple"><TrendingUp size={22} /></div>
           <div className="kpi-body">
-            <div className="kpi-value" style={{ color: '#7C3AED' }}>{stats.tauxRegen}%</div>
+            <div className="kpi-value">{stats.tauxRegen}%</div>
             <div className="kpi-label">Taux régénération</div>
           </div>
         </div>
