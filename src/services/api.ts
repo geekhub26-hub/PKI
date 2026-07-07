@@ -556,6 +556,10 @@ export const adminService = {
     return response.data;
   },
 
+  deleteAuditLog: async (id: string): Promise<void> => {
+    await apiClient.delete(`/admin/audit-logs/${id}`);
+  },
+
   revokeCertificate: async (certificateId: string, reason?: string): Promise<any> => {
     const response = await apiClient.post(`/admin/revoke/${certificateId}`, null, { params: { reason } });
     return response.data;
