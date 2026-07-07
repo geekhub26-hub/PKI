@@ -6,18 +6,7 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { userService, readApiError } from '../services/api';
 import Button from '../components/Button';
-
-const AVATARS = [
-  { id: 'g1', bg: 'linear-gradient(135deg,#065f46,#022c22)' },
-  { id: 'g2', bg: 'linear-gradient(135deg,#1d4ed8,#1e3a8a)' },
-  { id: 'g3', bg: 'linear-gradient(135deg,#7c3aed,#4c1d95)' },
-  { id: 'g4', bg: 'linear-gradient(135deg,#dc2626,#7f1d1d)' },
-  { id: 'g5', bg: 'linear-gradient(135deg,#d97706,#78350f)' },
-  { id: 'g6', bg: 'linear-gradient(135deg,#0369a1,#0c4a6e)' },
-  { id: 'g7', bg: 'linear-gradient(135deg,#0f766e,#134e4a)' },
-  { id: 'g8', bg: 'linear-gradient(135deg,#be185d,#831843)' },
-  { id: 'g9', bg: 'linear-gradient(135deg,#4338ca,#1e1b4b)' },
-];
+import { PRESET_AVATARS, resolveAvatarSrc } from '../utils/avatar';
 
 const ROLE_META: Record<string, { label: string; color: string; bg: string }> = {
   SUPER_ADMIN: { label: 'Super Admin',    color: '#7C3AED', bg: 'rgba(124,58,237,0.1)' },
@@ -37,23 +26,18 @@ function fmt(d?: string) {
 function fmtFull(d?: string) {
   return d ? new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 }
-function getAvatarBg(url?: string) {
-  if (!url || url.startsWith('data:')) return 'linear-gradient(135deg,#065f46,#022c22)';
-  if (url.startsWith('gradient:')) {
-    return AVATARS.find((a) => a.id === url.replace('gradient:', ''))?.bg ?? 'linear-gradient(135deg,#065f46,#022c22)';
-  }
-  return 'linear-gradient(135deg,#065f46,#022c22)';
-}
+const DEFAULT_BG = 'linear-gradient(135deg,#065f46,#022c22)';
 
 function AvatarCircle({ avatarUrl, firstName, lastName, size = 80 }: {
   avatarUrl?: string; firstName?: string; lastName?: string; size?: number;
 }) {
   const style = { width: size, height: size, fontSize: size * 0.28 };
   const base  = 'flex-shrink-0 rounded-full overflow-hidden flex items-center justify-center font-bold text-white shadow-lg';
-  if (avatarUrl?.startsWith('data:image/')) {
-    return <div className={base} style={style}><img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" /></div>;
+  const src   = resolveAvatarSrc(avatarUrl);
+  if (src) {
+    return <div className={base} style={style}><img src={src} alt="avatar" className="w-full h-full object-cover object-top" /></div>;
   }
-  return <div className={base} style={{ ...style, background: getAvatarBg(avatarUrl) }}>{getInitials(firstName, lastName)}</div>;
+  return <div className={base} style={{ ...style, background: DEFAULT_BG }}>{getInitials(firstName, lastName)}</div>;
 }
 
 const INPUT = 'h-10 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30';
@@ -243,15 +227,16 @@ export default function UserProfilePage() {
             {showPicker && (
               <div className="mt-4">
                 <p className="mb-3 text-[11px] text-slate-400">Sélectionnez un style ou importez une photo</p>
-                <div className="grid grid-cols-3 gap-2.5 justify-items-center">
-                  {AVATARS.map((a) => {
-                    const sel = user?.avatarUrl === `gradient:${a.id}`;
+                <div className="grid grid-cols-3 gap-3 justify-items-center">
+                  {PRESET_AVATARS.map((a) => {
+                    const sel = user?.avatarUrl === `avatar:${a.id}`;
+                    const url = resolveAvatarSrc(`avatar:${a.id}`) ?? '';
                     return (
-                      <button key={a.id} onClick={() => saveAvatar(`gradient:${a.id}`)} disabled={avatarBusy}
-                        className={`flex h-12 w-12 items-center justify-center rounded-full text-white font-bold text-sm transition-transform ${
-                          sel ? 'ring-2 ring-offset-2 ring-emerald-500 scale-110' : 'hover:scale-105'}`}
-                        style={{ background: a.bg }}>
-                        {getInitials(user?.firstName, user?.lastName)}
+                      <button key={a.id} onClick={() => saveAvatar(`avatar:${a.id}`)} disabled={avatarBusy}
+                        className={`relative h-14 w-14 rounded-full overflow-hidden transition-transform shadow-sm ${
+                          sel ? 'ring-2 ring-offset-2 ring-emerald-500 scale-110' : 'hover:scale-105 hover:shadow-md'}`}
+                        style={{ background: `#${a.bg}` }}>
+                        <img src={url} alt={`avatar ${a.id}`} className="w-full h-full object-cover object-top" />
                       </button>
                     );
                   })}
