@@ -29,7 +29,7 @@ public class RecepissController {
     // Public (sans authentification)
     // ─────────────────────────────────────────────
 
-    @GetMapping("/api/public/verify/{numero}")
+    @GetMapping("/public/verify/{numero}")
     public ResponseEntity<Map<String, Object>> verify(@PathVariable String numero) {
         Map<String, Object> result = recepissService.verifier(numero);
         return ResponseEntity.ok(result);
@@ -39,7 +39,7 @@ public class RecepissController {
     // Admin
     // ─────────────────────────────────────────────
 
-    @PostMapping("/api/admin/recepisses/generer/{requestId}")
+    @PostMapping("/admin/recepisses/generer/{requestId}")
     public ResponseEntity<?> generer(@PathVariable UUID requestId, Authentication auth) {
         User agent = resolveUser(auth);
         try {
@@ -52,7 +52,7 @@ public class RecepissController {
         }
     }
 
-    @PostMapping("/api/admin/recepisses/{id}/regenerer")
+    @PostMapping("/admin/recepisses/{id}/regenerer")
     public ResponseEntity<?> regenerer(@PathVariable UUID id, Authentication auth) {
         User agent = resolveUser(auth);
         try {
@@ -63,7 +63,7 @@ public class RecepissController {
         }
     }
 
-    @PutMapping("/api/admin/recepisses/{id}/annuler")
+    @PutMapping("/admin/recepisses/{id}/annuler")
     public ResponseEntity<?> annuler(@PathVariable UUID id,
                                      @RequestBody Map<String, String> body,
                                      Authentication auth) {
@@ -77,12 +77,12 @@ public class RecepissController {
         }
     }
 
-    @GetMapping("/api/admin/recepisses/stats")
+    @GetMapping("/admin/recepisses/stats")
     public ResponseEntity<Map<String, Object>> stats() {
         return ResponseEntity.ok(recepissService.getStats());
     }
 
-    @GetMapping("/api/admin/recepisses/export")
+    @GetMapping("/admin/recepisses/export")
     public ResponseEntity<byte[]> exportCsv() {
         byte[] csv = recepissService.exportCsv();
         return ResponseEntity.ok()
@@ -91,14 +91,14 @@ public class RecepissController {
                 .body(csv);
     }
 
-    @GetMapping("/api/admin/recepisses")
+    @GetMapping("/admin/recepisses")
     public ResponseEntity<List<Map<String, Object>>> listerTous() {
         List<Map<String, Object>> dtos = recepissService.listerTous().stream()
                 .map(this::toDto).toList();
         return ResponseEntity.ok(dtos);
     }
 
-    @GetMapping("/api/admin/recepisses/{id}/download")
+    @GetMapping("/admin/recepisses/{id}/download")
     public ResponseEntity<byte[]> downloadAdmin(@PathVariable UUID id) {
         try {
             byte[] pdf = recepissService.getPdfBytes(id);
@@ -111,7 +111,7 @@ public class RecepissController {
         }
     }
 
-    @GetMapping("/api/admin/recepisses/{id}/download/signed")
+    @GetMapping("/admin/recepisses/{id}/download/signed")
     public ResponseEntity<byte[]> downloadSignedAdmin(@PathVariable UUID id) {
         try {
             byte[] pdf = recepissService.getSignedPdfBytes(id);
@@ -128,7 +128,7 @@ public class RecepissController {
     // Usager
     // ─────────────────────────────────────────────
 
-    @GetMapping("/api/user/recepisses")
+    @GetMapping("/user/recepisses")
     public ResponseEntity<List<Map<String, Object>>> listerMes(Authentication auth) {
         User user = resolveUser(auth);
         List<Map<String, Object>> dtos = recepissService.listerPourUsager(user.getId()).stream()
@@ -136,7 +136,7 @@ public class RecepissController {
         return ResponseEntity.ok(dtos);
     }
 
-    @GetMapping("/api/user/recepisses/{id}/download")
+    @GetMapping("/user/recepisses/{id}/download")
     public ResponseEntity<byte[]> download(@PathVariable UUID id, Authentication auth) {
         try {
             byte[] pdf = recepissService.getPdfBytes(id);
@@ -149,7 +149,7 @@ public class RecepissController {
         }
     }
 
-    @GetMapping("/api/user/recepisses/{id}/download/signed")
+    @GetMapping("/user/recepisses/{id}/download/signed")
     public ResponseEntity<byte[]> downloadSigned(@PathVariable UUID id, Authentication auth) {
         try {
             byte[] pdf = recepissService.getSignedPdfBytes(id);

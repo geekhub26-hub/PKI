@@ -148,7 +148,7 @@ public class CAService {
 
         } catch (Exception e) {
             log.error("Failed to generate root CA", e);
-            throw new RuntimeException("Ã‰chec gÃ©nÃ©ration AC: " + e.getMessage(), e);
+            throw new RuntimeException("Échec génération AC: " + e.getMessage(), e);
         }
     }
 
@@ -522,7 +522,7 @@ public class CAService {
     public CAConfiguration generateIntermediateCA(String caName, int keySize, int validityDays) {
         try {
             CAConfiguration rootCA = caConfigurationRepository.findFirstByIsActiveTrueOrderByCreatedAtDesc()
-                    .orElseThrow(() -> new RuntimeException("Aucune AC racine active trouvÃ©e"));
+                    .orElseThrow(() -> new RuntimeException("Aucune AC racine active trouvée"));
 
             // Charger la clÃ© privÃ©e de l'AC racine depuis le keystore ou directement (si PEM existe encore)
             Path rootCertPath = Path.of(rootCA.caCertPath);
@@ -604,7 +604,7 @@ public class CAService {
 
         } catch (Exception e) {
             log.error("Failed to generate intermediate CA", e);
-            throw new RuntimeException("Ã‰chec gÃ©nÃ©ration AC intermÃ©diaire: " + e.getMessage(), e);
+            throw new RuntimeException("Échec génération AC intermédiaire: " + e.getMessage(), e);
         }
     }
 
@@ -792,7 +792,7 @@ public class CAService {
 
         } catch (Exception e) {
             log.error("Failed to generate CRL", e);
-            throw new RuntimeException("Ã‰chec gÃ©nÃ©ration CRL: " + e.getMessage(), e);
+            throw new RuntimeException("Échec génération CRL: " + e.getMessage(), e);
         }
     }
 }
