@@ -7,8 +7,7 @@ import {
   ArrowRight, Search, LogIn, UserPlus, LayoutGrid,
 } from 'lucide-react';
 
-/* ── Types ─────────────────────────────────────────────── */
-type Tab = 'user' | 'admin';
+const ADMIN_ROLES = ['ADMIN','SUPER_ADMIN','AE_CENTRALE','ADMIN_AEL','AEL'];
 
 interface Section {
   id: string;
@@ -530,35 +529,25 @@ function AdminDocs() {
 
 /* ── Main page ──────────────────────────────────────────── */
 export default function DocsPage() {
-  const { user } = useAuthStore();
-  const [tab, setTab]           = useState<Tab>(() => {
-    const adminRoles = ['ADMIN','SUPER_ADMIN','AE_CENTRALE','ADMIN_AEL','AEL'];
-    return adminRoles.includes(user?.role ?? '') ? 'admin' : 'user';
-  });
-  const [active, setActive]     = useState('');
-  const [search, setSearch]     = useState('');
-  const contentRef              = useRef<HTMLDivElement>(null);
+  const { user }    = useAuthStore();
+  const isAdmin     = ADMIN_ROLES.includes(user?.role ?? '');
+  const sections    = isAdmin ? ADMIN_SECTIONS : USER_SECTIONS;
 
-  const sections = tab === 'user' ? USER_SECTIONS : ADMIN_SECTIONS;
+  const [active, setActive] = useState('');
+  const [search, setSearch] = useState('');
+  const contentRef          = useRef<HTMLDivElement>(null);
 
-  // Track active section on scroll
   useEffect(() => {
     const obs = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => { if (e.isIntersecting) setActive(e.target.id); });
-      },
+      (entries) => { entries.forEach((e) => { if (e.isIntersecting) setActive(e.target.id); }); },
       { rootMargin: '-20% 0px -70% 0px' },
     );
-    sections.forEach(({ id }) => {
-      const el = document.getElementById(id);
-      if (el) obs.observe(el);
-    });
+    sections.forEach(({ id }) => { const el = document.getElementById(id); if (el) obs.observe(el); });
     return () => obs.disconnect();
-  }, [tab]);
+  }, [isAdmin]);
 
-  const scrollTo = (id: string) => {
+  const scrollTo = (id: string) =>
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
 
   const filtered = search.trim()
     ? sections.filter((s) => s.label.toLowerCase().includes(search.toLowerCase()))
@@ -569,34 +558,20 @@ export default function DocsPage() {
 
       {/* Header */}
       <div className="page-header-bar">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="mb-1 text-xs font-bold uppercase tracking-widest text-white/50">PKI Souverain</p>
-            <h1 className="flex items-center gap-2 text-2xl font-bold text-white">
-              <BookOpen size={22} /> Documentation
-            </h1>
-            <p className="mt-0.5 text-sm text-white/60">Guide complet d'utilisation de la plateforme</p>
+        <div className="flex items-center gap-4">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15">
+            {isAdmin ? <Shield size={22} className="text-white" /> : <User size={22} className="text-white" />}
           </div>
-          {/* Tabs */}
-          <div className="flex gap-2 rounded-xl border border-white/20 bg-white/10 p-1 backdrop-blur-sm">
-            <button
-              onClick={() => { setTab('user');  setActive(''); }}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                tab === 'user'
-                  ? 'bg-white text-emerald-700 shadow-sm'
-                  : 'text-white/80 hover:text-white'}`}
-            >
-              <User size={15} /> Utilisateurs
-            </button>
-            <button
-              onClick={() => { setTab('admin'); setActive(''); }}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                tab === 'admin'
-                  ? 'bg-white text-emerald-700 shadow-sm'
-                  : 'text-white/80 hover:text-white'}`}
-            >
-              <Shield size={15} /> Administrateurs
-            </button>
+          <div>
+            <p className="mb-0.5 text-xs font-bold uppercase tracking-widest text-white/50">
+              {isAdmin ? 'Espace Administrateur' : 'Espace Utilisateur'}
+            </p>
+            <h1 className="flex items-center gap-2 text-2xl font-bold text-white">
+              <BookOpen size={20} /> Documentation
+            </h1>
+            <p className="mt-0.5 text-sm text-white/60">
+              {isAdmin ? 'Guide d\'administration de la plateforme PKI Souverain' : 'Guide d\'utilisation de la plateforme PKI Souverain'}
+            </p>
           </div>
         </div>
       </div>
@@ -606,7 +581,6 @@ export default function DocsPage() {
         {/* ── Side navigation ───────────────────────────────── */}
         <aside className="hidden lg:block w-56 flex-shrink-0">
           <div className="pki-card sticky top-6 p-3">
-            {/* Search sections */}
             <div className="relative mb-3">
               <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -617,7 +591,6 @@ export default function DocsPage() {
                 className="h-8 w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-transparent pl-7 pr-3 text-xs text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
-
             <nav className="space-y-0.5">
               {filtered.map(({ id, label, icon: Icon }) => (
                 <button
@@ -643,17 +616,6 @@ export default function DocsPage() {
 
         {/* ── Content ───────────────────────────────────────── */}
         <div ref={contentRef} className="min-w-0 flex-1 pki-card p-6 lg:p-8">
-          {/* Mobile tabs */}
-          <div className="mb-6 flex gap-2 lg:hidden">
-            {['user','admin'].map((t) => (
-              <button key={t} onClick={() => setTab(t as Tab)}
-                className={`flex-1 rounded-lg py-2 text-sm font-semibold transition ${
-                  tab === t ? 'bg-emerald-600 text-white' : 'border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'}`}>
-                {t === 'user' ? 'Utilisateurs' : 'Administrateurs'}
-              </button>
-            ))}
-          </div>
-
           {/* Mobile section nav */}
           <div className="mb-6 flex flex-wrap gap-2 lg:hidden">
             {sections.map(({ id, label }) => (
@@ -664,7 +626,7 @@ export default function DocsPage() {
             ))}
           </div>
 
-          {tab === 'user'  ? <UserDocs />  : <AdminDocs />}
+          {isAdmin ? <AdminDocs /> : <UserDocs />}
         </div>
       </div>
     </div>
