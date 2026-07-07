@@ -100,13 +100,7 @@ public class UserController {
         this.passwordEncoder = passwordEncoder;
     }
 
-    @GetMapping("/me")
-    public ResponseEntity<AuthDTO.UserDTO> me(Authentication authentication) {
-        if (authentication == null || !(authentication.getPrincipal() instanceof User)) {
-            return ResponseEntity.status(401).build();
-        }
-
-        User user = (User) authentication.getPrincipal();
+    private AuthDTO.UserDTO toUserDTO(User user) {
         AuthDTO.UserDTO dto = new AuthDTO.UserDTO();
         dto.setId(user.getId());
         dto.setEmail(user.getEmail());
@@ -117,7 +111,16 @@ public class UserController {
         dto.setEmailVerified(user.getEmailVerified());
         dto.setCreatedAt(user.getCreatedAt());
         dto.setLastLogin(user.getLastLogin());
-        return ResponseEntity.ok(dto);
+        dto.setAvatarUrl(user.getAvatarUrl());
+        return dto;
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<AuthDTO.UserDTO> me(Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof User user)) {
+            return ResponseEntity.status(401).build();
+        }
+        return ResponseEntity.ok(toUserDTO(user));
     }
 
     @PutMapping("/profile")
@@ -132,18 +135,20 @@ public class UserController {
         }
         user.setFirstName(firstName);
         user.setLastName(lastName);
-        User saved = userRepository.save(user);
-        AuthDTO.UserDTO dto = new AuthDTO.UserDTO();
-        dto.setId(saved.getId());
-        dto.setEmail(saved.getEmail());
-        dto.setFirstName(saved.getFirstName());
-        dto.setLastName(saved.getLastName());
-        dto.setRole(saved.getRole().name());
-        dto.setIsActive(saved.getIsActive());
-        dto.setEmailVerified(saved.getEmailVerified());
-        dto.setCreatedAt(saved.getCreatedAt());
-        dto.setLastLogin(saved.getLastLogin());
-        return ResponseEntity.ok(dto);
+        return ResponseEntity.ok(toUserDTO(userRepository.save(user)));
+    }
+
+    @PutMapping("/avatar")
+    public ResponseEntity<?> updateAvatar(@RequestBody Map<String, String> body, Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof User user)) {
+            return ResponseEntity.status(401).build();
+        }
+        String avatarUrl = body.get("avatarUrl");
+        if (avatarUrl != null && avatarUrl.length() > 500_000) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Image trop volumineuse (max 500 Ko en base64)."));
+        }
+        user.setAvatarUrl(avatarUrl);
+        return ResponseEntity.ok(toUserDTO(userRepository.save(user)));
     }
 
     @PostMapping("/change-password")

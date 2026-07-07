@@ -90,6 +90,12 @@ public class User {
 	@Column(name = "two_fa_expires_at")
 	private LocalDateTime twoFaExpiresAt;
 
+	@Column(name = "avatar_url", columnDefinition = "TEXT")
+	private String avatarUrl;
+
+	public String getAvatarUrl() { return avatarUrl; }
+	public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
+
 	public UUID getId() {
 		return this.id;
 	}

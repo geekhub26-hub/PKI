@@ -101,6 +101,7 @@ public class AuthDTO {
         private Boolean emailVerified;
         private LocalDateTime createdAt;
         private LocalDateTime lastLogin;
+        private String avatarUrl;
 
         public UserDTO() {}
         public UserDTO(UUID id, String email, String firstName, String lastName, String role, Boolean isActive, Boolean emailVerified, LocalDateTime createdAt, LocalDateTime lastLogin) {
@@ -132,6 +133,8 @@ public class AuthDTO {
         public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
         public LocalDateTime getLastLogin() { return lastLogin; }
         public void setLastLogin(LocalDateTime lastLogin) { this.lastLogin = lastLogin; }
+        public String getAvatarUrl() { return avatarUrl; }
+        public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
         public String getFullName() {
             return firstName + " " + lastName;
         }
