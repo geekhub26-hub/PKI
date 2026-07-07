@@ -108,6 +108,7 @@ export interface User {
   emailVerified: boolean;
   createdAt: string;
   lastLogin?: string;
+  avatarUrl?: string;
 }
 
 export interface LoginRequest {
@@ -292,6 +293,11 @@ export const userService = {
 
   changePassword: async (data: { currentPassword: string; newPassword: string; confirmPassword: string }): Promise<void> => {
     await apiClient.post('/user/change-password', data);
+  },
+
+  updateAvatar: async (avatarUrl: string | null): Promise<User> => {
+    const response = await apiClient.put<User>('/user/avatar', { avatarUrl });
+    return response.data;
   },
   /**
    * Récupérer les certificats de l'utilisateur connecté

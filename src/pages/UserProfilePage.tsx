@@ -1,8 +1,23 @@
-import { useState } from 'react';
-import { User, Mail, Calendar, Clock, Shield, Eye, EyeOff, CheckCircle2, Edit3, KeyRound, Save, X } from 'lucide-react';
+import { useRef, useState } from 'react';
+import {
+  User, Mail, Calendar, Clock, Shield, Eye, EyeOff,
+  CheckCircle2, Edit3, KeyRound, Save, X, Camera, Trash2,
+} from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { userService, readApiError } from '../services/api';
 import Button from '../components/Button';
+
+const AVATARS = [
+  { id: 'g1', bg: 'linear-gradient(135deg,#065f46,#022c22)' },
+  { id: 'g2', bg: 'linear-gradient(135deg,#1d4ed8,#1e3a8a)' },
+  { id: 'g3', bg: 'linear-gradient(135deg,#7c3aed,#4c1d95)' },
+  { id: 'g4', bg: 'linear-gradient(135deg,#dc2626,#7f1d1d)' },
+  { id: 'g5', bg: 'linear-gradient(135deg,#d97706,#78350f)' },
+  { id: 'g6', bg: 'linear-gradient(135deg,#0369a1,#0c4a6e)' },
+  { id: 'g7', bg: 'linear-gradient(135deg,#0f766e,#134e4a)' },
+  { id: 'g8', bg: 'linear-gradient(135deg,#be185d,#831843)' },
+  { id: 'g9', bg: 'linear-gradient(135deg,#4338ca,#1e1b4b)' },
+];
 
 const ROLE_META: Record<string, { label: string; color: string; bg: string }> = {
   SUPER_ADMIN: { label: 'Super Admin',    color: '#7C3AED', bg: 'rgba(124,58,237,0.1)' },
@@ -13,25 +28,80 @@ const ROLE_META: Record<string, { label: string; color: string; bg: string }> = 
   USER:        { label: 'Utilisateur',   color: '#1D4ED8', bg: 'rgba(29,78,216,0.1)'  },
 };
 
-function getInitials(first?: string, last?: string) {
-  return ((first?.[0] ?? '') + (last?.[0] ?? '')).toUpperCase() || '?';
+function getInitials(f?: string, l?: string) {
+  return ((f?.[0] ?? '') + (l?.[0] ?? '')).toUpperCase() || '?';
+}
+function fmt(d?: string) {
+  return d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }) : '—';
+}
+function fmtFull(d?: string) {
+  return d ? new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+}
+function getAvatarBg(url?: string) {
+  if (!url || url.startsWith('data:')) return 'linear-gradient(135deg,#065f46,#022c22)';
+  if (url.startsWith('gradient:')) {
+    return AVATARS.find((a) => a.id === url.replace('gradient:', ''))?.bg ?? 'linear-gradient(135deg,#065f46,#022c22)';
+  }
+  return 'linear-gradient(135deg,#065f46,#022c22)';
 }
 
-function fmt(date?: string) {
-  if (!date) return '—';
-  return new Date(date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+function AvatarCircle({ avatarUrl, firstName, lastName, size = 80 }: {
+  avatarUrl?: string; firstName?: string; lastName?: string; size?: number;
+}) {
+  const style = { width: size, height: size, fontSize: size * 0.28 };
+  const base  = 'flex-shrink-0 rounded-full overflow-hidden flex items-center justify-center font-bold text-white shadow-lg';
+  if (avatarUrl?.startsWith('data:image/')) {
+    return <div className={base} style={style}><img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" /></div>;
+  }
+  return <div className={base} style={{ ...style, background: getAvatarBg(avatarUrl) }}>{getInitials(firstName, lastName)}</div>;
 }
 
-function fmtFull(date?: string) {
-  if (!date) return '—';
-  return new Date(date).toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
+const INPUT = 'h-10 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30';
 
 export default function UserProfilePage() {
   const { user, setUser } = useAuthStore();
   const meta = ROLE_META[user?.role ?? 'USER'] ?? ROLE_META.USER;
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  // ── Edit profile state ────────────────────────────────────────
+  /* ── Avatar ─────────────────────────────────────────────────────────────── */
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarMsg,  setAvatarMsg]  = useState<{ ok: boolean; text: string } | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { setAvatarMsg({ ok: false, text: 'Image trop grande (max 2 Mo).' }); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = async () => {
+        const MAX = 300;
+        const scale   = Math.min(1, MAX / Math.max(img.width, img.height));
+        const canvas  = document.createElement('canvas');
+        canvas.width  = img.width  * scale;
+        canvas.height = img.height * scale;
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        await saveAvatar(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const saveAvatar = async (url: string | null) => {
+    setAvatarBusy(true); setAvatarMsg(null);
+    try {
+      setUser(await userService.updateAvatar(url));
+      setShowPicker(false);
+      setAvatarMsg({ ok: true, text: 'Avatar mis à jour.' });
+    } catch (err) {
+      setAvatarMsg({ ok: false, text: readApiError(err, 'Erreur.') });
+    } finally { setAvatarBusy(false); }
+  };
+
+  /* ── Profile ────────────────────────────────────────────────────────────── */
   const [editMode,    setEditMode]    = useState(false);
   const [firstName,   setFirstName]   = useState(user?.firstName ?? '');
   const [lastName,    setLastName]    = useState(user?.lastName  ?? '');
@@ -39,80 +109,89 @@ export default function UserProfilePage() {
   const [profileBusy, setProfileBusy] = useState(false);
 
   const handleSaveProfile = async () => {
-    if (!firstName.trim() || !lastName.trim()) {
-      setProfileMsg({ ok: false, text: 'Prénom et nom sont requis.' });
-      return;
-    }
-    setProfileBusy(true);
-    setProfileMsg(null);
+    if (!firstName.trim() || !lastName.trim()) { setProfileMsg({ ok: false, text: 'Prénom et nom requis.' }); return; }
+    setProfileBusy(true); setProfileMsg(null);
     try {
-      const updated = await userService.updateProfile({ firstName: firstName.trim(), lastName: lastName.trim() });
-      setUser(updated);
+      setUser(await userService.updateProfile({ firstName: firstName.trim(), lastName: lastName.trim() }));
       setEditMode(false);
-      setProfileMsg({ ok: true, text: 'Profil mis à jour avec succès.' });
+      setProfileMsg({ ok: true, text: 'Profil mis à jour.' });
     } catch (e) {
-      setProfileMsg({ ok: false, text: readApiError(e, 'Erreur lors de la mise à jour.') });
-    } finally {
-      setProfileBusy(false);
-    }
+      setProfileMsg({ ok: false, text: readApiError(e, 'Erreur.') });
+    } finally { setProfileBusy(false); }
   };
 
-  const handleCancelEdit = () => {
-    setFirstName(user?.firstName ?? '');
-    setLastName(user?.lastName ?? '');
-    setEditMode(false);
-    setProfileMsg(null);
-  };
-
-  // ── Change password state ─────────────────────────────────────
+  /* ── Password ───────────────────────────────────────────────────────────── */
   const [currentPwd,  setCurrentPwd]  = useState('');
   const [newPwd,      setNewPwd]      = useState('');
   const [confirmPwd,  setConfirmPwd]  = useState('');
-  const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew,     setShowNew]     = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [pwdMsg,      setPwdMsg]      = useState<{ ok: boolean; text: string } | null>(null);
-  const [pwdBusy,     setPwdBusy]     = useState(false);
+  const [showC, setShowC] = useState(false);
+  const [showN, setShowN] = useState(false);
+  const [showX, setShowX] = useState(false);
+  const [pwdMsg,  setPwdMsg]  = useState<{ ok: boolean; text: string } | null>(null);
+  const [pwdBusy, setPwdBusy] = useState(false);
 
-  const pwdStrength = (pwd: string) => {
-    let score = 0;
-    if (pwd.length >= 8)  score++;
-    if (pwd.length >= 12) score++;
-    if (/[A-Z]/.test(pwd)) score++;
-    if (/[0-9]/.test(pwd)) score++;
-    if (/[^A-Za-z0-9]/.test(pwd)) score++;
-    return score;
-  };
-  const strength = pwdStrength(newPwd);
-  const strengthLabel = ['', 'Très faible', 'Faible', 'Moyen', 'Fort', 'Très fort'][strength] ?? '';
-  const strengthColor = ['', '#EF4444', '#F97316', '#EAB308', '#22C55E', '#059669'][strength] ?? '#EF4444';
+  const strength = [
+    newPwd.length >= 8, newPwd.length >= 12,
+    /[A-Z]/.test(newPwd), /[0-9]/.test(newPwd), /[^A-Za-z0-9]/.test(newPwd),
+  ].filter(Boolean).length;
+  const sLabel = ['','Très faible','Faible','Moyen','Fort','Très fort'][strength];
+  const sColor = ['','#EF4444','#F97316','#EAB308','#22C55E','#059669'][strength];
 
-  const handleChangePassword = async () => {
+  const handlePwd = async () => {
     setPwdMsg(null);
-    if (!currentPwd || !newPwd || !confirmPwd) {
-      setPwdMsg({ ok: false, text: 'Tous les champs sont requis.' });
-      return;
-    }
-    if (newPwd.length < 8) {
-      setPwdMsg({ ok: false, text: 'Le nouveau mot de passe doit comporter au moins 8 caractères.' });
-      return;
-    }
-    if (newPwd !== confirmPwd) {
-      setPwdMsg({ ok: false, text: 'Les nouveaux mots de passe ne correspondent pas.' });
-      return;
-    }
+    if (!currentPwd || !newPwd || !confirmPwd) { setPwdMsg({ ok: false, text: 'Tous les champs requis.' }); return; }
+    if (newPwd.length < 8)   { setPwdMsg({ ok: false, text: 'Minimum 8 caractères.' }); return; }
+    if (newPwd !== confirmPwd) { setPwdMsg({ ok: false, text: 'Les mots de passe ne correspondent pas.' }); return; }
     setPwdBusy(true);
     try {
       await userService.changePassword({ currentPassword: currentPwd, newPassword: newPwd, confirmPassword: confirmPwd });
       setCurrentPwd(''); setNewPwd(''); setConfirmPwd('');
-      setShowCurrent(false); setShowNew(false); setShowConfirm(false);
-      setPwdMsg({ ok: true, text: 'Mot de passe modifié avec succès.' });
+      setPwdMsg({ ok: true, text: 'Mot de passe modifié.' });
     } catch (e) {
-      setPwdMsg({ ok: false, text: readApiError(e, 'Erreur lors du changement de mot de passe.') });
-    } finally {
-      setPwdBusy(false);
-    }
+      setPwdMsg({ ok: false, text: readApiError(e, 'Erreur.') });
+    } finally { setPwdBusy(false); }
   };
+
+  const alert = (msg: { ok: boolean; text: string } | null) => msg && (
+    <div className={`mb-4 rounded-xl px-4 py-3 text-sm font-medium border ${msg.ok
+      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-500/30 dark:text-emerald-300'
+      : 'bg-red-50 border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-500/30 dark:text-red-300'}`}>
+      {msg.text}
+    </div>
+  );
+
+  const PwdField = ({ label, val, set, show, toggle, ac }: {
+    label: string; val: string; set: (v: string) => void;
+    show: boolean; toggle: () => void; ac: string;
+  }) => (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">{label}</label>
+      <div className="relative">
+        <input type={show ? 'text' : 'password'} value={val} onChange={(e) => set(e.target.value)}
+          autoComplete={ac} placeholder="••••••••" className={`${INPUT} pr-10`} />
+        <button type="button" onClick={toggle}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition">
+          {show ? <EyeOff size={16} /> : <Eye size={16} />}
+        </button>
+      </div>
+      {ac === 'new-password' && label.includes('Nouveau') && newPwd.length > 0 && (
+        <div className="mt-2">
+          <div className="flex gap-1 mb-1">
+            {[1,2,3,4,5].map((i) => (
+              <div key={i} className="h-1 flex-1 rounded-full transition-all"
+                style={{ background: i <= strength ? sColor : '#E2E8F0' }} />
+            ))}
+          </div>
+          <p className="text-xs font-medium" style={{ color: sColor }}>{sLabel}</p>
+        </div>
+      )}
+      {ac === 'new-password' && label.includes('Confirmer') && confirmPwd.length > 0 && (
+        <p className={`mt-1 text-xs ${newPwd === confirmPwd ? 'text-emerald-600' : 'text-red-500'}`}>
+          {newPwd === confirmPwd ? 'Correspond ✓' : 'Ne correspond pas'}
+        </p>
+      )}
+    </div>
+  );
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -124,96 +203,95 @@ export default function UserProfilePage() {
         </div>
         <div>
           <h1 className="text-xl font-bold text-white">Mon profil</h1>
-          <p className="text-sm text-emerald-100/80">Gérez vos informations personnelles et votre sécurité</p>
+          <p className="text-sm text-emerald-100/80">Gérez vos informations et votre sécurité</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
 
-        {/* ── Left: identity summary ─────────────────────────── */}
+        {/* ── LEFT ────────────────────────────────────────────────────── */}
         <div className="space-y-4 lg:col-span-1">
 
           {/* Avatar card */}
-          <div className="pki-card rounded-2xl p-6 text-center">
-            <div
-              className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full text-2xl font-bold text-white shadow-lg"
-              style={{ background: 'linear-gradient(135deg, #065f46, #022c22)' }}
-            >
-              {getInitials(user?.firstName, user?.lastName)}
+          <div className="pki-card p-6 text-center">
+            {/* Circle with camera button */}
+            <div className="relative mx-auto mb-4 w-fit">
+              <AvatarCircle avatarUrl={user?.avatarUrl} firstName={user?.firstName} lastName={user?.lastName} size={88} />
+              <button onClick={() => fileRef.current?.click()} disabled={avatarBusy}
+                className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-700 text-white shadow-md hover:bg-emerald-600 disabled:opacity-50 transition"
+                title="Importer une photo">
+                <Camera size={13} />
+              </button>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
             </div>
-            <h2 className="text-lg font-bold text-slate-800 dark:text-white">
-              {user?.firstName} {user?.lastName}
-            </h2>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{user?.email}</p>
-            <span
-              className="mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
-              style={{ background: meta.bg, color: meta.color }}
-            >
-              {meta.label}
-            </span>
+
+            <h2 className="text-lg font-bold text-slate-800 dark:text-white">{user?.firstName} {user?.lastName}</h2>
+            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400 truncate">{user?.email}</p>
+            <span className="mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
+              style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
+
+            {avatarMsg && (
+              <p className={`mt-3 text-xs ${avatarMsg.ok ? 'text-emerald-600' : 'text-red-500'}`}>{avatarMsg.text}</p>
+            )}
+
+            {/* Picker toggle */}
+            <button onClick={() => setShowPicker((v) => !v)}
+              className="mt-4 w-full rounded-lg border border-slate-200 dark:border-slate-700 py-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+              {showPicker ? '▲ Masquer les avatars' : '▼ Choisir un avatar'}
+            </button>
+
+            {showPicker && (
+              <div className="mt-4">
+                <p className="mb-3 text-[11px] text-slate-400">Sélectionnez un style ou importez une photo</p>
+                <div className="grid grid-cols-3 gap-2.5 justify-items-center">
+                  {AVATARS.map((a) => {
+                    const sel = user?.avatarUrl === `gradient:${a.id}`;
+                    return (
+                      <button key={a.id} onClick={() => saveAvatar(`gradient:${a.id}`)} disabled={avatarBusy}
+                        className={`flex h-12 w-12 items-center justify-center rounded-full text-white font-bold text-sm transition-transform ${
+                          sel ? 'ring-2 ring-offset-2 ring-emerald-500 scale-110' : 'hover:scale-105'}`}
+                        style={{ background: a.bg }}>
+                        {getInitials(user?.firstName, user?.lastName)}
+                      </button>
+                    );
+                  })}
+                </div>
+                {user?.avatarUrl && (
+                  <button onClick={() => saveAvatar(null)} disabled={avatarBusy}
+                    className="mt-3 flex items-center gap-1.5 mx-auto text-xs text-red-500 hover:text-red-700 transition">
+                    <Trash2 size={12} /> Supprimer l'avatar
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Account info */}
-          <div className="pki-card rounded-2xl p-5 space-y-3">
-            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
-              Informations compte
-            </h3>
-
-            <div className="flex items-start gap-3 text-sm">
-              <Mail size={15} className="mt-0.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
-              <div>
-                <div className="text-slate-500 dark:text-slate-400 text-[11px] uppercase tracking-wide">Email</div>
-                <div className="font-medium text-slate-800 dark:text-white break-all">{user?.email}</div>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 text-sm">
-              <CheckCircle2 size={15} className="mt-0.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
-              <div>
-                <div className="text-slate-500 dark:text-slate-400 text-[11px] uppercase tracking-wide">Email vérifié</div>
-                <div className="font-medium">
-                  {user?.emailVerified
-                    ? <span className="text-emerald-600 dark:text-emerald-400">Vérifié</span>
-                    : <span className="text-amber-500">Non vérifié</span>}
+          <div className="pki-card p-5 space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-slate-400">Informations compte</h3>
+            {[
+              { icon: <Mail size={14} />,         label: 'Email',              val: user?.email },
+              { icon: <CheckCircle2 size={14} />,  label: 'Email vérifié',     val: user?.emailVerified ? 'Vérifié ✓' : 'Non vérifié', color: user?.emailVerified ? '#059669' : '#F59E0B' },
+              { icon: <Calendar size={14} />,      label: 'Membre depuis',      val: fmt(user?.createdAt) },
+              { icon: <Clock size={14} />,         label: 'Dernière connexion', val: fmtFull(user?.lastLogin) },
+              { icon: <Shield size={14} />,        label: 'Statut',             val: user?.isActive ? 'Actif' : 'Inactif', color: user?.isActive ? '#059669' : '#EF4444' },
+            ].map(({ icon, label, val, color }) => (
+              <div key={label} className="flex items-start gap-2.5 text-sm">
+                <span className="mt-0.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400">{icon}</span>
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
+                  <div className="truncate font-medium text-slate-800 dark:text-white" style={color ? { color } : {}}>{val ?? '—'}</div>
                 </div>
               </div>
-            </div>
-
-            <div className="flex items-start gap-3 text-sm">
-              <Calendar size={15} className="mt-0.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
-              <div>
-                <div className="text-slate-500 dark:text-slate-400 text-[11px] uppercase tracking-wide">Membre depuis</div>
-                <div className="font-medium text-slate-800 dark:text-white">{fmt(user?.createdAt)}</div>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 text-sm">
-              <Clock size={15} className="mt-0.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
-              <div>
-                <div className="text-slate-500 dark:text-slate-400 text-[11px] uppercase tracking-wide">Dernière connexion</div>
-                <div className="font-medium text-slate-800 dark:text-white">{fmtFull(user?.lastLogin)}</div>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 text-sm">
-              <Shield size={15} className="mt-0.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
-              <div>
-                <div className="text-slate-500 dark:text-slate-400 text-[11px] uppercase tracking-wide">Statut compte</div>
-                <div className="font-medium">
-                  {user?.isActive
-                    ? <span className="text-emerald-600 dark:text-emerald-400">Actif</span>
-                    : <span className="text-red-500">Inactif</span>}
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* ── Right: forms ──────────────────────────────────── */}
+        {/* ── RIGHT ───────────────────────────────────────────────────── */}
         <div className="space-y-6 lg:col-span-2">
 
-          {/* Edit profile card */}
-          <div className="pki-card rounded-2xl p-6">
+          {/* Edit profile */}
+          <div className="pki-card p-6">
             <div className="mb-5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
@@ -222,203 +300,59 @@ export default function UserProfilePage() {
                 <h3 className="text-base font-bold text-slate-800 dark:text-white">Informations personnelles</h3>
               </div>
               {!editMode && (
-                <Button variant="outline" size="sm" onClick={() => setEditMode(true)} icon={<Edit3 size={14} />}>
-                  Modifier
-                </Button>
+                <Button variant="outline" size="sm" onClick={() => setEditMode(true)} icon={<Edit3 size={14} />}>Modifier</Button>
               )}
             </div>
 
-            {profileMsg && (
-              <div className={`mb-4 rounded-xl px-4 py-3 text-sm font-medium ${
-                profileMsg.ok
-                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-500/30 dark:text-emerald-300'
-                  : 'bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-500/30 dark:text-red-300'
-              }`}>
-                {profileMsg.text}
-              </div>
-            )}
+            {alert(profileMsg)}
 
             <div className="space-y-4">
-              {/* Email — always read-only */}
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Adresse email
-                </label>
-                <div className="h-10 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 cursor-not-allowed opacity-70">
-                  <Mail size={15} className="flex-shrink-0 text-slate-400" />
-                  <span className="text-slate-600 dark:text-slate-300 text-sm">{user?.email}</span>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Adresse email</label>
+                <div className={`${INPUT} flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 opacity-60 cursor-not-allowed`}>
+                  <Mail size={14} className="flex-shrink-0 text-slate-400" />
+                  <span>{user?.email}</span>
                 </div>
-                <p className="mt-1 text-xs text-slate-400">L'adresse email ne peut pas être modifiée.</p>
+                <p className="mt-1 text-xs text-slate-400">L'email ne peut pas être modifié.</p>
               </div>
-
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Prénom
-                  </label>
-                  <input
-                    type="text"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    disabled={!editMode}
-                    className="h-10 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 w-full disabled:bg-slate-50 disabled:opacity-70 dark:disabled:bg-slate-800/50"
-                    placeholder="Votre prénom"
-                  />
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Prénom</label>
+                  <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)}
+                    disabled={!editMode} placeholder="Prénom"
+                    className={`${INPUT} disabled:bg-slate-50 disabled:opacity-60 dark:disabled:bg-slate-800/50`} />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Nom de famille
-                  </label>
-                  <input
-                    type="text"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    disabled={!editMode}
-                    className="h-10 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 w-full disabled:bg-slate-50 disabled:opacity-70 dark:disabled:bg-slate-800/50"
-                    placeholder="Votre nom"
-                  />
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Nom</label>
+                  <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)}
+                    disabled={!editMode} placeholder="Nom"
+                    className={`${INPUT} disabled:bg-slate-50 disabled:opacity-60 dark:disabled:bg-slate-800/50`} />
                 </div>
               </div>
-
               {editMode && (
                 <div className="flex items-center gap-3 pt-1">
-                  <Button
-                    variant="primary"
-                    onClick={handleSaveProfile}
-                    loading={profileBusy}
-                    icon={<Save size={15} />}
-                  >
-                    Enregistrer
-                  </Button>
-                  <Button variant="secondary" onClick={handleCancelEdit} icon={<X size={15} />}>
-                    Annuler
-                  </Button>
+                  <Button variant="primary" onClick={handleSaveProfile} loading={profileBusy} icon={<Save size={15} />}>Enregistrer</Button>
+                  <Button variant="secondary" onClick={() => { setEditMode(false); setFirstName(user?.firstName ?? ''); setLastName(user?.lastName ?? ''); }} icon={<X size={15} />}>Annuler</Button>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Change password card */}
-          <div className="pki-card rounded-2xl p-6">
+          {/* Change password */}
+          <div className="pki-card p-6">
             <div className="mb-5 flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
                 <KeyRound size={15} className="text-amber-700 dark:text-amber-400" />
               </div>
               <h3 className="text-base font-bold text-slate-800 dark:text-white">Changer le mot de passe</h3>
             </div>
-
-            {pwdMsg && (
-              <div className={`mb-4 rounded-xl px-4 py-3 text-sm font-medium ${
-                pwdMsg.ok
-                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-500/30 dark:text-emerald-300'
-                  : 'bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-500/30 dark:text-red-300'
-              }`}>
-                {pwdMsg.text}
-              </div>
-            )}
-
+            {alert(pwdMsg)}
             <div className="space-y-4">
-              {/* Current password */}
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Mot de passe actuel
-                </label>
-                <div className="relative">
-                  <input
-                    type={showCurrent ? 'text' : 'password'}
-                    value={currentPwd}
-                    onChange={(e) => setCurrentPwd(e.target.value)}
-                    className="h-10 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 w-full pr-10"
-                    placeholder="••••••••"
-                    autoComplete="current-password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowCurrent((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
-                  >
-                    {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </div>
-
-              {/* New password */}
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Nouveau mot de passe
-                </label>
-                <div className="relative">
-                  <input
-                    type={showNew ? 'text' : 'password'}
-                    value={newPwd}
-                    onChange={(e) => setNewPwd(e.target.value)}
-                    className="h-10 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 w-full pr-10"
-                    placeholder="••••••••"
-                    autoComplete="new-password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowNew((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
-                  >
-                    {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-                {/* Strength indicator */}
-                {newPwd.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    <div className="flex gap-1">
-                      {[1, 2, 3, 4, 5].map((i) => (
-                        <div
-                          key={i}
-                          className="h-1 flex-1 rounded-full transition-all duration-300"
-                          style={{ background: i <= strength ? strengthColor : '#E2E8F0' }}
-                        />
-                      ))}
-                    </div>
-                    <p className="text-xs font-medium" style={{ color: strengthColor }}>{strengthLabel}</p>
-                  </div>
-                )}
-                <p className="mt-1.5 text-xs text-slate-400">Au moins 8 caractères. Combinez majuscules, chiffres et symboles.</p>
-              </div>
-
-              {/* Confirm password */}
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Confirmer le nouveau mot de passe
-                </label>
-                <div className="relative">
-                  <input
-                    type={showConfirm ? 'text' : 'password'}
-                    value={confirmPwd}
-                    onChange={(e) => setConfirmPwd(e.target.value)}
-                    className="h-10 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 w-full pr-10"
-                    placeholder="••••••••"
-                    autoComplete="new-password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirm((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
-                  >
-                    {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-                {confirmPwd.length > 0 && newPwd !== confirmPwd && (
-                  <p className="mt-1 text-xs text-red-500">Les mots de passe ne correspondent pas.</p>
-                )}
-                {confirmPwd.length > 0 && newPwd === confirmPwd && (
-                  <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">Les mots de passe correspondent.</p>
-                )}
-              </div>
-
+              <PwdField label="Mot de passe actuel"           val={currentPwd} set={setCurrentPwd} show={showC} toggle={() => setShowC(v => !v)} ac="current-password" />
+              <PwdField label="Nouveau mot de passe"          val={newPwd}     set={setNewPwd}     show={showN} toggle={() => setShowN(v => !v)} ac="new-password" />
+              <PwdField label="Confirmer le nouveau mot passe"val={confirmPwd} set={setConfirmPwd} show={showX} toggle={() => setShowX(v => !v)} ac="new-password" />
               <div className="pt-1">
-                <Button
-                  variant="primary"
-                  onClick={handleChangePassword}
-                  loading={pwdBusy}
-                  icon={<KeyRound size={15} />}
-                >
+                <Button variant="primary" onClick={handlePwd} loading={pwdBusy} icon={<KeyRound size={15} />}>
                   Changer le mot de passe
                 </Button>
               </div>

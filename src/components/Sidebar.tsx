@@ -106,16 +106,24 @@ export default function Sidebar() {
 
       {/* ── User card ────────────────────────────────────── */}
       <div className="mx-3 mt-4 p-3 user-card flex items-center gap-3">
-        <div
-          className="avatar h-9 w-9 text-sm flex-shrink-0"
-          style={{
-            background: meta.bg,
-            color: meta.color,
-            border: `1.5px solid ${meta.color}40`,
-          }}
-        >
-          {getInitials(user?.firstName, user?.lastName)}
-        </div>
+        {user?.avatarUrl?.startsWith('data:image/') ? (
+          <img src={user.avatarUrl} alt="avatar"
+            className="avatar h-9 w-9 text-sm flex-shrink-0 object-cover"
+            style={{ border: `1.5px solid ${meta.color}40` }} />
+        ) : (
+          <div
+            className="avatar h-9 w-9 text-sm flex-shrink-0"
+            style={{
+              background: user?.avatarUrl?.startsWith('gradient:')
+                ? (['linear-gradient(135deg,#065f46,#022c22)','linear-gradient(135deg,#1d4ed8,#1e3a8a)','linear-gradient(135deg,#7c3aed,#4c1d95)','linear-gradient(135deg,#dc2626,#7f1d1d)','linear-gradient(135deg,#d97706,#78350f)','linear-gradient(135deg,#0369a1,#0c4a6e)','linear-gradient(135deg,#0f766e,#134e4a)','linear-gradient(135deg,#be185d,#831843)','linear-gradient(135deg,#4338ca,#1e1b4b)'][parseInt(user.avatarUrl.replace('gradient:g', '')) - 1] ?? meta.bg)
+                : meta.bg,
+              color: meta.color,
+              border: `1.5px solid ${meta.color}40`,
+            }}
+          >
+            {getInitials(user?.firstName, user?.lastName)}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold text-slate-800 dark:text-white leading-tight">
             {user?.firstName} {user?.lastName}

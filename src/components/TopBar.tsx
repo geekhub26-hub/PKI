@@ -183,15 +183,30 @@ export default function TopBar() {
       <ThemeToggle />
 
       {/* Avatar — navigates to profile */}
-      <button
-        type="button"
-        onClick={() => navigate('/profile')}
-        title="Mon profil"
-        className="flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold text-white transition hover:opacity-80"
-        style={{ background: 'linear-gradient(135deg, #065f46, #022c22)' }}
-      >
-        {getInitials(user?.firstName, user?.lastName)}
-      </button>
+      {user?.avatarUrl?.startsWith('data:image/') ? (
+        <button
+          type="button"
+          onClick={() => navigate('/profile')}
+          title="Mon profil"
+          className="flex h-9 w-9 overflow-hidden rounded-xl transition hover:opacity-80 flex-shrink-0"
+        >
+          <img src={user.avatarUrl} alt="avatar" className="h-full w-full object-cover" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => navigate('/profile')}
+          title="Mon profil"
+          className="flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold text-white transition hover:opacity-80 flex-shrink-0"
+          style={{
+            background: user?.avatarUrl?.startsWith('gradient:')
+              ? (['linear-gradient(135deg,#065f46,#022c22)','linear-gradient(135deg,#1d4ed8,#1e3a8a)','linear-gradient(135deg,#7c3aed,#4c1d95)','linear-gradient(135deg,#dc2626,#7f1d1d)','linear-gradient(135deg,#d97706,#78350f)','linear-gradient(135deg,#0369a1,#0c4a6e)','linear-gradient(135deg,#0f766e,#134e4a)','linear-gradient(135deg,#be185d,#831843)','linear-gradient(135deg,#4338ca,#1e1b4b)'][parseInt(user.avatarUrl.replace('gradient:g', '')) - 1] ?? 'linear-gradient(135deg,#065f46,#022c22)')
+              : 'linear-gradient(135deg,#065f46,#022c22)',
+          }}
+        >
+          {getInitials(user?.firstName, user?.lastName)}
+        </button>
+      )}
     </div>
   );
 }
