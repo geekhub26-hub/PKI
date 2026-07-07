@@ -427,6 +427,7 @@ public class AuthService {
         dto.setEmailVerified(user.getEmailVerified());
         dto.setCreatedAt(user.getCreatedAt());
         dto.setLastLogin(user.getLastLogin());
+        dto.setAvatarUrl(user.getAvatarUrl());
         return dto;
     }
 }
