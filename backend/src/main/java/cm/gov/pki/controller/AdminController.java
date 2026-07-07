@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/admin")
@@ -302,6 +303,17 @@ public class AdminController {
 		resp.put("size", logPage.getSize());
 		resp.put("totalPages", logPage.getTotalPages());
 		return ResponseEntity.ok(resp);
+	}
+
+	@DeleteMapping("/audit-logs/{id}")
+	public ResponseEntity<?> deleteAuditLog(
+			@PathVariable UUID id,
+			Authentication authentication) {
+		if (!(authentication.getPrincipal() instanceof cm.gov.pki.entity.User admin)) return ResponseEntity.status(401).build();
+		if (!auditLogRepository.existsById(id)) return ResponseEntity.notFound().build();
+		auditLogRepository.deleteById(id);
+		auditService.log(admin, cm.gov.pki.entity.AuditLog.Actions.USER_LOGIN, "AuditLog", id, java.util.Map.of("action", "DELETE_AUDIT_LOG"));
+		return ResponseEntity.noContent().build();
 	}
 
 	// --- Certificate request management for admins ---
