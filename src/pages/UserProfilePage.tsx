@@ -134,7 +134,7 @@ export default function UserProfilePage() {
         <div className="space-y-4 lg:col-span-1">
 
           {/* Avatar card */}
-          <div className="card-surface rounded-2xl p-6 text-center">
+          <div className="pki-card rounded-2xl p-6 text-center">
             <div
               className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full text-2xl font-bold text-white shadow-lg"
               style={{ background: 'linear-gradient(135deg, #065f46, #022c22)' }}
@@ -154,7 +154,7 @@ export default function UserProfilePage() {
           </div>
 
           {/* Account info */}
-          <div className="card-surface rounded-2xl p-5 space-y-3">
+          <div className="pki-card rounded-2xl p-5 space-y-3">
             <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
               Informations compte
             </h3>
@@ -213,7 +213,7 @@ export default function UserProfilePage() {
         <div className="space-y-6 lg:col-span-2">
 
           {/* Edit profile card */}
-          <div className="card-surface rounded-2xl p-6">
+          <div className="pki-card rounded-2xl p-6">
             <div className="mb-5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
@@ -244,7 +244,7 @@ export default function UserProfilePage() {
                 <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Adresse email
                 </label>
-                <div className="form-input flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 cursor-not-allowed opacity-70">
+                <div className="h-10 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 cursor-not-allowed opacity-70">
                   <Mail size={15} className="flex-shrink-0 text-slate-400" />
                   <span className="text-slate-600 dark:text-slate-300 text-sm">{user?.email}</span>
                 </div>
@@ -261,7 +261,7 @@ export default function UserProfilePage() {
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     disabled={!editMode}
-                    className="form-input w-full disabled:bg-slate-50 disabled:opacity-70 dark:disabled:bg-slate-800/50"
+                    className="h-10 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 w-full disabled:bg-slate-50 disabled:opacity-70 dark:disabled:bg-slate-800/50"
                     placeholder="Votre prénom"
                   />
                 </div>
@@ -274,7 +274,7 @@ export default function UserProfilePage() {
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     disabled={!editMode}
-                    className="form-input w-full disabled:bg-slate-50 disabled:opacity-70 dark:disabled:bg-slate-800/50"
+                    className="h-10 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 w-full disabled:bg-slate-50 disabled:opacity-70 dark:disabled:bg-slate-800/50"
                     placeholder="Votre nom"
                   />
                 </div>
@@ -299,7 +299,7 @@ export default function UserProfilePage() {
           </div>
 
           {/* Change password card */}
-          <div className="card-surface rounded-2xl p-6">
+          <div className="pki-card rounded-2xl p-6">
             <div className="mb-5 flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
                 <KeyRound size={15} className="text-amber-700 dark:text-amber-400" />
@@ -328,7 +328,7 @@ export default function UserProfilePage() {
                     type={showCurrent ? 'text' : 'password'}
                     value={currentPwd}
                     onChange={(e) => setCurrentPwd(e.target.value)}
-                    className="form-input w-full pr-10"
+                    className="h-10 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 w-full pr-10"
                     placeholder="••••••••"
                     autoComplete="current-password"
                   />
@@ -352,7 +352,7 @@ export default function UserProfilePage() {
                     type={showNew ? 'text' : 'password'}
                     value={newPwd}
                     onChange={(e) => setNewPwd(e.target.value)}
-                    className="form-input w-full pr-10"
+                    className="h-10 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 w-full pr-10"
                     placeholder="••••••••"
                     autoComplete="new-password"
                   />
@@ -392,7 +392,7 @@ export default function UserProfilePage() {
                     type={showConfirm ? 'text' : 'password'}
                     value={confirmPwd}
                     onChange={(e) => setConfirmPwd(e.target.value)}
-                    className="form-input w-full pr-10"
+                    className="h-10 w-full appearance-none rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 transition focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 w-full pr-10"
                     placeholder="••••••••"
                     autoComplete="new-password"
                   />
