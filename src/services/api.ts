@@ -411,6 +411,11 @@ export const adminService = {
     return response.data;
   },
 
+  getSystemStats: async (): Promise<{ users: number; certificates: number; certificateRequests: number; activeCA: boolean }> => {
+    const response = await apiClient.get<{ users: number; certificates: number; certificateRequests: number; activeCA: boolean }>('/admin/stats');
+    return response.data;
+  },
+
   /**
    * Initialiser l'AC Racine
    */

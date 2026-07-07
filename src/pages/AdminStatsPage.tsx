@@ -1,288 +1,277 @@
 import { useEffect, useState } from 'react';
 import { adminService } from '../services/api';
-import { useAuthStore } from '../stores/authStore';
-import { Link } from 'react-router-dom';
 import {
-  BarChart, Bar, PieChart, Pie, Cell,
+  PieChart, Pie, Cell, BarChart, Bar,
   ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Legend,
 } from 'recharts';
 import {
-  ArrowLeft, Users, Clock3, CheckCircle2, XCircle,
-  Building2, CalendarClock, ShieldCheck, AlertTriangle,
-  Activity, FileCheck2, KeyRound,
+  TrendingUp, Users, FileCheck2, ShieldCheck,
+  AlertTriangle, CheckCircle2, XCircle, Clock3,
+  BarChart3,
 } from 'lucide-react';
 
+type DashData = {
+  totalUsers: number;
+  pendingRequests: number;
+  activeCertificates: number;
+  revokedCertificates: number;
+  caStatus: any;
+};
+
+type SysStats = {
+  users: number;
+  certificates: number;
+  certificateRequests: number;
+  activeCA: boolean;
+};
+
+function pct(num: number, den: number) {
+  if (!den) return 0;
+  return Math.round((num / den) * 100);
+}
+
+function StatBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
+  const p = pct(value, total);
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-sm">
+        <span className="text-slate-600 dark:text-slate-300">{label}</span>
+        <span className="font-semibold text-slate-800 dark:text-white">
+          {value} <span className="font-normal text-slate-400">({p}%)</span>
+        </span>
+      </div>
+      <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-700">
+        <div
+          className="h-2 rounded-full transition-all duration-500"
+          style={{ width: `${p}%`, background: color }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function MetricTile({ icon, label, value, sub, color }: {
+  icon: React.ReactNode; label: string; value: string; sub: string; color: string;
+}) {
+  return (
+    <div className="card-surface rounded-2xl p-5 flex items-start gap-4">
+      <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl" style={{ background: color + '20' }}>
+        <span style={{ color }}>{icon}</span>
+      </div>
+      <div>
+        <div className="text-2xl font-bold text-slate-800 dark:text-white">{value}</div>
+        <div className="text-sm font-medium text-slate-700 dark:text-slate-200">{label}</div>
+        <div className="mt-0.5 text-xs text-slate-400">{sub}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminStatsPage() {
-  const user = useAuthStore((state) => state.user);
-  const [dashboard, setDashboard] = useState<any>(null);
+  const [dash, setDash]   = useState<DashData | null>(null);
+  const [sys,  setSys]    = useState<SysStats | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { loadStats(); }, []);
-
-  const loadStats = async () => {
-    try {
-      const data = await adminService.getDashboard();
-      setDashboard(data);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    Promise.all([adminService.getDashboard(), adminService.getSystemStats()])
+      .then(([d, s]) => { setDash(d); setSys(s); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-blue-500" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-emerald-500" />
       </div>
     );
   }
 
-  const expDays = dashboard?.caStatus?.daysUntilExpiration;
-  const requestSeries = [
-    { name: 'En attente', value: dashboard?.pendingRequests || 0 },
-    { name: 'Actifs',    value: dashboard?.activeCertificates || 0 },
-    { name: 'Révoqués',  value: dashboard?.revokedCertificates || 0 },
+  const totalCerts   = (dash?.activeCertificates ?? 0) + (dash?.revokedCertificates ?? 0);
+  const totalReqs    = sys?.certificateRequests ?? 0;
+  const revokeRate   = pct(dash?.revokedCertificates ?? 0, totalCerts);
+  const pendingRate  = pct(dash?.pendingRequests ?? 0, totalReqs);
+  const approvalRate = 100 - pendingRate;
+  const expDays      = dash?.caStatus?.daysUntilExpiration;
+
+  // Pie — certificats par statut
+  const certPie = [
+    { name: 'Actifs',   value: dash?.activeCertificates   ?? 0 },
+    { name: 'Révoqués', value: dash?.revokedCertificates  ?? 0 },
   ];
-  const volumeSeries = [
-    { name: 'Utilisateurs', value: dashboard?.totalUsers || 0 },
-    { name: 'Demandes',     value: dashboard?.pendingRequests || 0 },
-    { name: 'Certificats',  value: dashboard?.activeCertificates || 0 },
+  const PIE_COLORS = ['#059669', '#EF4444'];
+
+  // Pie — demandes par état
+  const reqPie = [
+    { name: 'En attente', value: dash?.pendingRequests      ?? 0 },
+    { name: 'Émis',       value: dash?.activeCertificates   ?? 0 },
+    { name: 'Révoqués',   value: dash?.revokedCertificates  ?? 0 },
   ];
-  const statusColors = ['#2563eb', '#10b981', '#ef4444'];
-  const ca = dashboard?.caStatus;
+  const REQ_COLORS = ['#F59E0B', '#059669', '#EF4444'];
+
+  // Bar — vue globale
+  const barData = [
+    { name: 'Utilisateurs',     count: dash?.totalUsers          ?? 0, fill: '#3B82F6' },
+    { name: 'Demandes totales', count: totalReqs,                      fill: '#F59E0B' },
+    { name: 'Certificats émis', count: sys?.certificates         ?? 0, fill: '#059669' },
+    { name: 'Révoqués',         count: dash?.revokedCertificates ?? 0, fill: '#EF4444' },
+  ];
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 py-6">
+    <div className="mx-auto max-w-7xl space-y-6">
+
       {/* Header */}
-      <div className="page-header-bar">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="mb-1 text-xs font-bold uppercase tracking-widest text-white/50">
-              Administration PKI
-            </p>
-            <h1 className="text-2xl font-bold text-white">Statistiques système</h1>
-            <p className="mt-0.5 text-sm text-white/60">{user?.email}</p>
-          </div>
-          <Link
-            to="/admin/dashboard"
-            className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/20 transition hover:bg-white/20"
-          >
-            <ArrowLeft size={14} /> Retour
-          </Link>
+      <div className="page-header-bar flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15">
+          <BarChart3 size={20} className="text-white" />
+        </div>
+        <div>
+          <h1 className="text-xl font-bold text-white">Statistiques &amp; Analytique</h1>
+          <p className="text-sm text-emerald-100/80">Vue analytique du système PKI Souverain</p>
         </div>
       </div>
 
-      {/* KPI row */}
+      {/* Computed KPIs — focus on derived metrics, not raw counts */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="kpi-card blue">
-          <div className="kpi-icon blue"><Users size={22} /></div>
-          <div className="kpi-body">
-            <div className="kpi-value">{dashboard?.totalUsers || 0}</div>
-            <div className="kpi-label">Utilisateurs</div>
-          </div>
-        </div>
-        <div className="kpi-card amber">
-          <div className="kpi-icon amber"><Clock3 size={22} /></div>
-          <div className="kpi-body">
-            <div className="kpi-value">{dashboard?.pendingRequests || 0}</div>
-            <div className="kpi-label">Demandes en attente</div>
-          </div>
-        </div>
-        <div className="kpi-card green">
-          <div className="kpi-icon green"><CheckCircle2 size={22} /></div>
-          <div className="kpi-body">
-            <div className="kpi-value">{dashboard?.activeCertificates || 0}</div>
-            <div className="kpi-label">Certificats actifs</div>
-          </div>
-        </div>
-        <div className="kpi-card red">
-          <div className="kpi-icon red"><XCircle size={22} /></div>
-          <div className="kpi-body">
-            <div className="kpi-value">{dashboard?.revokedCertificates || 0}</div>
-            <div className="kpi-label">Révoqués</div>
-          </div>
-        </div>
+        <MetricTile
+          icon={<XCircle size={20} />}
+          label="Taux de révocation"
+          value={`${revokeRate}%`}
+          sub={`${dash?.revokedCertificates ?? 0} sur ${totalCerts} certificats`}
+          color="#EF4444"
+        />
+        <MetricTile
+          icon={<Clock3 size={20} />}
+          label="Demandes en attente"
+          value={`${pendingRate}%`}
+          sub={`${dash?.pendingRequests ?? 0} sur ${totalReqs} demandes totales`}
+          color="#F59E0B"
+        />
+        <MetricTile
+          icon={<TrendingUp size={20} />}
+          label="Taux d'émission"
+          value={`${approvalRate}%`}
+          sub={`${sys?.certificates ?? 0} certificats émis au total`}
+          color="#059669"
+        />
+        <MetricTile
+          icon={expDays !== undefined && expDays < 90 ? <AlertTriangle size={20} /> : <ShieldCheck size={20} />}
+          label="Validité AC"
+          value={expDays !== undefined ? `${expDays}j` : '—'}
+          sub={expDays !== undefined
+            ? expDays < 30 ? 'Renouvellement urgent' : expDays < 90 ? 'Renouvellement proche' : 'AC valide'
+            : 'AC non initialisée'}
+          color={expDays === undefined ? '#94A3B8' : expDays < 30 ? '#EF4444' : expDays < 90 ? '#F59E0B' : '#059669'}
+        />
       </div>
 
-      {/* CA Details */}
-      <div className="pki-card p-6">
-        <div className="section-title">
-          <div className="flex items-center gap-2">
-            <Building2 size={15} className="text-blue-500" />
-            <span>Autorité de Certification</span>
+      {/* Charts row 1 — deux pie charts */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="card-surface rounded-2xl p-6">
+          <div className="mb-1 flex items-center gap-2">
+            <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400" />
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Certificats par statut</h3>
           </div>
-          {ca?.isInitialized && (
-            <span className="status-badge status-active">Active et opérationnelle</span>
+          <p className="mb-4 text-xs text-slate-400">{totalCerts} certificats au total</p>
+          {totalCerts === 0 ? (
+            <div className="flex h-48 items-center justify-center text-sm text-slate-400">Aucun certificat émis</div>
+          ) : (
+            <>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={certPie} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={4}>
+                      {certPie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v: any) => [`${v}`, '']} />
+                    <Legend iconType="circle" iconSize={9} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-4 space-y-3">
+                <StatBar label="Actifs"   value={dash?.activeCertificates  ?? 0} total={totalCerts} color="#059669" />
+                <StatBar label="Révoqués" value={dash?.revokedCertificates ?? 0} total={totalCerts} color="#EF4444" />
+              </div>
+            </>
           )}
         </div>
 
-        {ca?.isInitialized ? (
-          <div className="grid gap-6 md:grid-cols-2">
-            <div>
-              <div className="info-row">
-                <span className="info-row-label"><FileCheck2 size={12} /> Nom AC</span>
-                <span className="info-row-value">{ca.caName || 'N/A'}</span>
+        <div className="card-surface rounded-2xl p-6">
+          <div className="mb-1 flex items-center gap-2">
+            <FileCheck2 size={15} className="text-amber-600 dark:text-amber-400" />
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Demandes par état</h3>
+          </div>
+          <p className="mb-4 text-xs text-slate-400">{totalReqs} demandes enregistrées</p>
+          {totalReqs === 0 ? (
+            <div className="flex h-48 items-center justify-center text-sm text-slate-400">Aucune demande</div>
+          ) : (
+            <>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={reqPie} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={4}>
+                      {reqPie.map((_, i) => <Cell key={i} fill={REQ_COLORS[i]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v: any) => [`${v}`, '']} />
+                    <Legend iconType="circle" iconSize={9} />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-              <div className="info-row">
-                <span className="info-row-label"><KeyRound size={12} /> Subject DN</span>
-                <span className="info-row-value text-xs">{ca.subjectDN || 'N/A'}</span>
+              <div className="mt-4 space-y-3">
+                <StatBar label="En attente" value={dash?.pendingRequests     ?? 0} total={totalReqs} color="#F59E0B" />
+                <StatBar label="Émis"       value={dash?.activeCertificates  ?? 0} total={totalReqs} color="#059669" />
+                <StatBar label="Révoqués"   value={dash?.revokedCertificates ?? 0} total={totalReqs} color="#EF4444" />
               </div>
-            </div>
-            <div>
-              <div className="info-row">
-                <span className="info-row-label"><CalendarClock size={12} /> Valide depuis</span>
-                <span className="info-row-value">
-                  {ca.validFrom ? new Date(ca.validFrom).toLocaleDateString('fr-FR') : 'N/A'}
-                </span>
-              </div>
-              <div className="info-row">
-                <span className="info-row-label"><CalendarClock size={12} /> Expire le</span>
-                <span className="info-row-value">
-                  {ca.validUntil ? new Date(ca.validUntil).toLocaleDateString('fr-FR') : 'N/A'}
-                </span>
-              </div>
-              {expDays !== undefined && (
-                <div className="info-row">
-                  <span className="info-row-label">
-                    {expDays < 30
-                      ? <AlertTriangle size={12} className="text-red-500" />
-                      : <ShieldCheck size={12} className="text-emerald-500" />
-                    } Jours restants
-                  </span>
-                  <span className={`info-row-value font-bold text-base ${expDays < 30 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                    {expDays}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-700/40 dark:bg-amber-900/20">
-            <div className="mb-2 flex items-center gap-2 text-amber-700 dark:text-amber-400">
-              <AlertTriangle size={18} />
-              <p className="font-semibold">AC non initialisée</p>
-            </div>
-            <p className="text-sm text-slate-600 dark:text-slate-300">
-              Initialiser la CA racine avant émission des certificats.
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Activity + Actions */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <div className="pki-card p-6">
-          <div className="section-title">
-            <div className="flex items-center gap-2">
-              <Activity size={15} className="text-blue-500" />
-              <span>Activité système</span>
-            </div>
-          </div>
-          <div className="info-row">
-            <span className="info-row-label"><Clock3 size={12} className="text-amber-500" /> En attente</span>
-            <span className="info-row-value text-amber-600 dark:text-amber-400 font-bold">
-              {dashboard?.pendingRequests || 0}
-            </span>
-          </div>
-          <div className="info-row">
-            <span className="info-row-label"><CheckCircle2 size={12} className="text-emerald-500" /> Émis</span>
-            <span className="info-row-value text-emerald-600 dark:text-emerald-400 font-bold">
-              {dashboard?.activeCertificates || 0}
-            </span>
-          </div>
-          <div className="info-row">
-            <span className="info-row-label"><XCircle size={12} className="text-red-500" /> Révoqués</span>
-            <span className="info-row-value text-red-600 dark:text-red-400 font-bold">
-              {dashboard?.revokedCertificates || 0}
-            </span>
-          </div>
-          <div className="info-row">
-            <span className="info-row-label"><Users size={12} className="text-blue-500" /> Utilisateurs</span>
-            <span className="info-row-value text-blue-600 dark:text-blue-400 font-bold">
-              {dashboard?.totalUsers || 0}
-            </span>
-          </div>
-        </div>
-
-        <div className="pki-card p-6">
-          <div className="section-title">
-            <div className="flex items-center gap-2">
-              <ShieldCheck size={15} className="text-emerald-500" />
-              <span>Accès rapides</span>
-            </div>
-          </div>
-          <div className="space-y-0.5">
-            <Link to="/admin/requests" className="action-row">
-              <div className="action-row-icon amber"><Clock3 size={14} /></div>
-              <span className="flex-1">Voir les demandes</span>
-              <span className="text-slate-400">→</span>
-            </Link>
-            <Link to="/admin/generate-ca" className="action-row">
-              <div className="action-row-icon green"><Building2 size={14} /></div>
-              <span className="flex-1">Générer une CA</span>
-              <span className="text-slate-400">→</span>
-            </Link>
-            <Link to="/admin/sign-csr" className="action-row">
-              <div className="action-row-icon violet"><FileCheck2 size={14} /></div>
-              <span className="flex-1">Signer une CSR</span>
-              <span className="text-slate-400">→</span>
-            </Link>
-            <Link to="/admin/generate-crl" className="action-row">
-              <div className="action-row-icon slate"><Activity size={14} /></div>
-              <span className="flex-1">Générer une CRL</span>
-              <span className="text-slate-400">→</span>
-            </Link>
-            <Link to="/admin/revoke-certificate" className="action-row">
-              <div className="action-row-icon red"><XCircle size={14} /></div>
-              <span className="flex-1">Révoquer un certificat</span>
-              <span className="text-slate-400">→</span>
-            </Link>
-          </div>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Charts */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="pki-card p-6">
-          <div className="section-title">
-            <div className="flex items-center gap-2">
-              <Activity size={15} className="text-blue-500" />
-              <span>Répartition des statuts</span>
-            </div>
+      {/* Bar chart — vue globale + summary */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="card-surface rounded-2xl p-6 lg:col-span-2">
+          <div className="mb-1 flex items-center gap-2">
+            <BarChart3 size={15} className="text-blue-500" />
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Vue d'ensemble système</h3>
           </div>
-          <div className="h-64 sm:h-72">
+          <p className="mb-4 text-xs text-slate-400">Volumes globaux par catégorie</p>
+          <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={requestSeries} dataKey="value" nameKey="name" innerRadius={60} outerRadius={90} paddingAngle={3}>
-                  {requestSeries.map((entry, index) => (
-                    <Cell key={`cell-${entry.name}`} fill={statusColors[index % statusColors.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="pki-card p-6">
-          <div className="section-title">
-            <div className="flex items-center gap-2">
-              <Users size={15} className="text-blue-500" />
-              <span>Volumes globaux</span>
-            </div>
-          </div>
-          <div className="h-64 sm:h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={volumeSeries} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+              <BarChart data={barData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="value" fill="#2563eb" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                  {barData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Résumé chiffré */}
+        <div className="card-surface rounded-2xl p-6">
+          <div className="mb-4 flex items-center gap-2">
+            <Users size={15} className="text-blue-500" />
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Résumé chiffré</h3>
+          </div>
+          <div className="space-y-4">
+            {[
+              { icon: <Users size={14} />,      label: 'Utilisateurs inscrits', value: dash?.totalUsers ?? 0,          color: '#3B82F6' },
+              { icon: <FileCheck2 size={14} />,  label: 'Demandes totales',     value: totalReqs,                      color: '#F59E0B' },
+              { icon: <CheckCircle2 size={14} />,label: 'Certificats émis',     value: sys?.certificates ?? 0,         color: '#059669' },
+              { icon: <Clock3 size={14} />,      label: 'En attente traitement',value: dash?.pendingRequests ?? 0,     color: '#F59E0B' },
+              { icon: <XCircle size={14} />,     label: 'Certificats révoqués', value: dash?.revokedCertificates ?? 0, color: '#EF4444' },
+            ].map(({ icon, label, value, color }) => (
+              <div key={label} className="flex items-center justify-between border-b border-slate-100 pb-3 last:border-0 last:pb-0 dark:border-slate-700/50">
+                <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                  <span style={{ color }}>{icon}</span>
+                  {label}
+                </div>
+                <span className="text-base font-bold text-slate-800 dark:text-white">{value}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
