@@ -7,10 +7,12 @@ import cm.gov.pki.entity.User;
 import cm.gov.pki.repository.CAConfigurationRepository;
 import cm.gov.pki.repository.CertificateRepository;
 import cm.gov.pki.repository.CertificateRequestRepository;
+import cm.gov.pki.repository.UserRepository;
 import cm.gov.pki.service.AuditService;
 import cm.gov.pki.service.CAService;
 import cm.gov.pki.service.EmailService;
 import cm.gov.pki.service.IdentityDocumentAiService;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,6 +74,8 @@ public class UserController {
     private final CAConfigurationRepository caConfigurationRepository;
     private final AuditService auditService;
     private final EmailService emailService;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Autowired
     public UserController(
@@ -81,7 +85,9 @@ public class UserController {
             IdentityDocumentAiService identityDocumentAiService,
             CAConfigurationRepository caConfigurationRepository,
             AuditService auditService,
-            EmailService emailService
+            EmailService emailService,
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder
     ) {
         this.certificateRepository = certificateRepository;
         this.certificateRequestRepository = certificateRequestRepository;
@@ -90,6 +96,8 @@ public class UserController {
         this.caConfigurationRepository = caConfigurationRepository;
         this.emailService = emailService;
         this.auditService = auditService;
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @GetMapping("/me")
@@ -110,6 +118,57 @@ public class UserController {
         dto.setCreatedAt(user.getCreatedAt());
         dto.setLastLogin(user.getLastLogin());
         return ResponseEntity.ok(dto);
+    }
+
+    @PutMapping("/profile")
+    public ResponseEntity<?> updateProfile(@RequestBody Map<String, String> body, Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof User user)) {
+            return ResponseEntity.status(401).build();
+        }
+        String firstName = body.getOrDefault("firstName", "").trim();
+        String lastName  = body.getOrDefault("lastName",  "").trim();
+        if (firstName.isEmpty() || lastName.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Prénom et nom sont requis."));
+        }
+        user.setFirstName(firstName);
+        user.setLastName(lastName);
+        User saved = userRepository.save(user);
+        AuthDTO.UserDTO dto = new AuthDTO.UserDTO();
+        dto.setId(saved.getId());
+        dto.setEmail(saved.getEmail());
+        dto.setFirstName(saved.getFirstName());
+        dto.setLastName(saved.getLastName());
+        dto.setRole(saved.getRole().name());
+        dto.setIsActive(saved.getIsActive());
+        dto.setEmailVerified(saved.getEmailVerified());
+        dto.setCreatedAt(saved.getCreatedAt());
+        dto.setLastLogin(saved.getLastLogin());
+        return ResponseEntity.ok(dto);
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<?> changePassword(@RequestBody Map<String, String> body, Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof User user)) {
+            return ResponseEntity.status(401).build();
+        }
+        String current    = body.getOrDefault("currentPassword", "");
+        String newPwd     = body.getOrDefault("newPassword",     "");
+        String confirmPwd = body.getOrDefault("confirmPassword", "");
+        if (current.isEmpty() || newPwd.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Tous les champs sont requis."));
+        }
+        if (!passwordEncoder.matches(current, user.getPasswordHash())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Mot de passe actuel incorrect."));
+        }
+        if (newPwd.length() < 8) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Le nouveau mot de passe doit comporter au moins 8 caractères."));
+        }
+        if (!confirmPwd.isEmpty() && !newPwd.equals(confirmPwd)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Les nouveaux mots de passe ne correspondent pas."));
+        }
+        user.setPasswordHash(passwordEncoder.encode(newPwd));
+        userRepository.save(user);
+        return ResponseEntity.ok(Map.of("message", "Mot de passe modifié avec succès."));
     }
 
     @GetMapping("/certificates")
