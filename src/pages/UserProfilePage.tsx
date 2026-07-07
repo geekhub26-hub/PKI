@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import {
   User, Mail, Calendar, Clock, Shield, Eye, EyeOff,
-  CheckCircle2, Edit3, KeyRound, Save, X, Camera, Trash2,
+  CheckCircle2, Edit3, KeyRound, Save, X, Camera,
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { userService, readApiError } from '../services/api';
@@ -198,14 +198,26 @@ export default function UserProfilePage() {
 
           {/* Avatar card */}
           <div className="pki-card p-6 text-center">
-            {/* Circle with camera button */}
+            {/* Circle with action buttons */}
             <div className="relative mx-auto mb-4 w-fit">
               <AvatarCircle avatarUrl={user?.avatarUrl} firstName={user?.firstName} lastName={user?.lastName} size={88} />
+
+              {/* Camera — always visible */}
               <button onClick={() => fileRef.current?.click()} disabled={avatarBusy}
                 className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-700 text-white shadow-md hover:bg-emerald-600 disabled:opacity-50 transition"
                 title="Importer une photo">
                 <Camera size={13} />
               </button>
+
+              {/* Remove — only when an avatar is set */}
+              {user?.avatarUrl && (
+                <button onClick={() => saveAvatar(null)} disabled={avatarBusy}
+                  className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-rose-500 text-white shadow-md hover:bg-rose-600 disabled:opacity-50 transition"
+                  title="Supprimer l'avatar">
+                  <X size={12} />
+                </button>
+              )}
+
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
             </div>
 
@@ -241,12 +253,6 @@ export default function UserProfilePage() {
                     );
                   })}
                 </div>
-                {user?.avatarUrl && (
-                  <button onClick={() => saveAvatar(null)} disabled={avatarBusy}
-                    className="mt-3 flex items-center gap-1.5 mx-auto text-xs text-red-500 hover:text-red-700 transition">
-                    <Trash2 size={12} /> Supprimer l'avatar
-                  </button>
-                )}
               </div>
             )}
           </div>
