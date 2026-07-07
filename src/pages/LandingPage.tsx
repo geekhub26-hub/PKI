@@ -24,15 +24,20 @@ import {
 } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
 
+const NAV_ITEMS: [string, string][] = [
+  ['Fonctionnalités', 'fonctionnalites'],
+  ['Processus',       'processus'],
+  ['FAQ',             'faq'],
+  ['À propos',        'a-propos'],
+];
+
+function scrollTo(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 export default function LandingPage() {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const navItems = [
-    ['Fonctionnalités', '#fonctionnalites'],
-    ['Processus', '#processus'],
-    ['FAQ', '#faq'],
-    ['À propos', '#a-propos'],
-  ];
 
   return (
     <div className="min-h-screen bg-emerald-50 dark:bg-slate-950">
@@ -54,14 +59,14 @@ export default function LandingPage() {
 
             {/* Nav desktop */}
             <nav className="hidden md:flex space-x-1">
-              {navItems.map(([label, href]) => (
-                <a
+              {NAV_ITEMS.map(([label, id]) => (
+                <button
                   key={label}
-                  href={href}
+                  onClick={() => scrollTo(id)}
                   className="px-4 py-2 text-slate-600 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-400 font-medium transition-colors rounded-full hover:bg-emerald-50 dark:hover:bg-slate-800"
                 >
                   {label}
-                </a>
+                </button>
               ))}
             </nav>
 
@@ -100,15 +105,14 @@ export default function LandingPage() {
           {mobileMenuOpen && (
             <div className="md:hidden border-t border-emerald-100 dark:border-slate-700 py-3">
               <nav className="flex flex-col gap-1 mb-3">
-                {navItems.map(([label, href]) => (
-                  <a
+                {NAV_ITEMS.map(([label, id]) => (
+                  <button
                     key={label}
-                    href={href}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-400 font-medium transition-colors rounded-lg hover:bg-emerald-50 dark:hover:bg-slate-800"
+                    onClick={() => { scrollTo(id); setMobileMenuOpen(false); }}
+                    className="px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-400 font-medium transition-colors rounded-lg hover:bg-emerald-50 dark:hover:bg-slate-800"
                   >
                     {label}
-                  </a>
+                  </button>
                 ))}
               </nav>
               <div className="flex items-center gap-2">
@@ -456,8 +460,12 @@ export default function LandingPage() {
             <div className="lg:col-span-2">
               <h4 className="font-semibold text-white mb-4">Navigation</h4>
               <ul className="space-y-2 text-sm">
-                {navItems.map(([label, href]) => (
-                  <li key={label}><a href={href} className="hover:text-white transition">{label}</a></li>
+                {NAV_ITEMS.map(([label, id]) => (
+                  <li key={label}>
+                    <button onClick={() => scrollTo(id)} className="hover:text-white transition text-left">
+                      {label}
+                    </button>
+                  </li>
                 ))}
               </ul>
             </div>
