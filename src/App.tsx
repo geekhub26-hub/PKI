@@ -26,6 +26,7 @@ import UserRevokeCertificatePage from './pages/UserRevokeCertificatePage';
 import UserValidateTokenPage from './pages/UserValidateTokenPage';
 import UserRecepisses from './pages/UserRecepisses';
 import UserProfilePage from './pages/UserProfilePage';
+import DocsPage from './pages/DocsPage';
 import VerifyPage from './pages/VerifyPage';
 import SuperAdminSettingsPage from './pages/SuperAdminSettingsPage';
 import AdminRecepisseStatsPage from './pages/AdminRecepisseStatsPage';
@@ -141,6 +142,7 @@ function App() {
             <Route path="/download-crl" element={<UserDownloadCrlPage />} />
             <Route path="/recepisses" element={<UserRecepisses />} />
             <Route path="/profile" element={<UserProfilePage />} />
+            <Route path="/docs" element={<DocsPage />} />
 
             <Route path="/admin/dashboard" element={<DashboardAdminPage />} />
             <Route path="/admin/stats" element={<AdminStatsPage />} />

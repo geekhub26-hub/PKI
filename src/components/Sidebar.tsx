@@ -6,7 +6,7 @@ import { resolveAvatarSrc } from '../utils/avatar';
 import {
   LayoutGrid, Award, FileText, CheckSquare, XCircle, Download,
   BarChart3, RefreshCw, Key, LogOut, ChevronRight,
-  User, UserCog, Menu, X, ClipboardList, Settings2, ShieldCheck, Lock,
+  User, UserCog, Menu, X, ClipboardList, Settings2, ShieldCheck, Lock, BookOpen,
 } from 'lucide-react';
 
 const userLinks = [
@@ -206,6 +206,18 @@ export default function Sidebar() {
 
       {/* ── Profile + Logout ─────────────────────────────── */}
       <div className="border-t border-emerald-100 dark:border-white/[0.07] px-3 py-3 space-y-0.5">
+        <Link
+          to="/docs"
+          className={clsx('nav-item mb-0.5', isActive('/docs') && 'active')}
+        >
+          <BookOpen
+            size={16}
+            className="flex-shrink-0"
+            style={{ color: isActive('/docs') ? '#FFFFFF' : undefined }}
+          />
+          <span className="flex-1 truncate">Documentation</span>
+          {isActive('/docs') && <ChevronRight size={14} className="flex-shrink-0 opacity-60" />}
+        </Link>
         <Link
           to="/profile"
           className={clsx('nav-item mb-0.5', isActive('/profile') && 'active')}
