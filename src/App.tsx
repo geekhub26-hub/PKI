@@ -25,6 +25,7 @@ import UserRequestPipelinePage from './pages/UserRequestPipelinePage';
 import UserRevokeCertificatePage from './pages/UserRevokeCertificatePage';
 import UserValidateTokenPage from './pages/UserValidateTokenPage';
 import UserRecepisses from './pages/UserRecepisses';
+import UserProfilePage from './pages/UserProfilePage';
 import VerifyPage from './pages/VerifyPage';
 import SuperAdminSettingsPage from './pages/SuperAdminSettingsPage';
 import AdminRecepisseStatsPage from './pages/AdminRecepisseStatsPage';
@@ -139,6 +140,7 @@ function App() {
             <Route path="/revoke-certificate" element={<UserRevokeCertificatePage />} />
             <Route path="/download-crl" element={<UserDownloadCrlPage />} />
             <Route path="/recepisses" element={<UserRecepisses />} />
+            <Route path="/profile" element={<UserProfilePage />} />
 
             <Route path="/admin/dashboard" element={<DashboardAdminPage />} />
             <Route path="/admin/stats" element={<AdminStatsPage />} />

@@ -284,6 +284,15 @@ export const userService = {
     const response = await apiClient.get<User>('/user/me');
     return response.data;
   },
+
+  updateProfile: async (data: { firstName: string; lastName: string }): Promise<User> => {
+    const response = await apiClient.put<User>('/user/profile', data);
+    return response.data;
+  },
+
+  changePassword: async (data: { currentPassword: string; newPassword: string; confirmPassword: string }): Promise<void> => {
+    await apiClient.post('/user/change-password', data);
+  },
   /**
    * Récupérer les certificats de l'utilisateur connecté
    */

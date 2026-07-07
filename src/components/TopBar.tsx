@@ -182,11 +182,16 @@ export default function TopBar() {
       {/* Theme toggle */}
       <ThemeToggle />
 
-      {/* Avatar */}
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold text-white"
-        style={{ background: 'linear-gradient(135deg, #065f46, #022c22)' }}>
+      {/* Avatar — navigates to profile */}
+      <button
+        type="button"
+        onClick={() => navigate('/profile')}
+        title="Mon profil"
+        className="flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold text-white transition hover:opacity-80"
+        style={{ background: 'linear-gradient(135deg, #065f46, #022c22)' }}
+      >
         {getInitials(user?.firstName, user?.lastName)}
-      </div>
+      </button>
     </div>
   );
 }

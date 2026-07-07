@@ -201,8 +201,20 @@ export default function Sidebar() {
         <div className="ml-auto h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
       </div>
 
-      {/* ── Logout ───────────────────────────────────────── */}
-      <div className="border-t border-emerald-100 dark:border-white/[0.07] px-3 py-3">
+      {/* ── Profile + Logout ─────────────────────────────── */}
+      <div className="border-t border-emerald-100 dark:border-white/[0.07] px-3 py-3 space-y-0.5">
+        <Link
+          to="/profile"
+          className={clsx('nav-item mb-0.5', isActive('/profile') && 'active')}
+        >
+          <User
+            size={16}
+            className="flex-shrink-0"
+            style={{ color: isActive('/profile') ? '#FFFFFF' : undefined }}
+          />
+          <span className="flex-1 truncate">Mon profil</span>
+          {isActive('/profile') && <ChevronRight size={14} className="flex-shrink-0 opacity-60" />}
+        </Link>
         <button
           onClick={handleLogout}
           className="nav-item w-full text-red-500 hover:!text-red-600 hover:!bg-red-50 dark:text-rose-300 dark:hover:!text-rose-200 dark:hover:!bg-rose-900/20"
