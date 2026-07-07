@@ -94,7 +94,7 @@ function App() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-950">
+      <div className="min-h-screen flex items-center justify-center bg-emerald-50 dark:bg-neutral-950">
         <div className="text-h3 text-primary-800 dark:text-neutral-100">Chargement...</div>
       </div>
     );
@@ -121,7 +121,7 @@ function App() {
                   <Sidebar />
                   <div className="flex flex-1 flex-col overflow-hidden">
                     <TopBar />
-                    <main className="flex-1 overflow-y-auto bg-neutral-50 dark:bg-neutral-950 p-4 sm:p-6 md:p-8">
+                    <main className="flex-1 overflow-y-auto bg-emerald-50 dark:bg-neutral-950 p-4 sm:p-6 md:p-8">
                       <ErrorBoundary>
                         <Outlet />
                       </ErrorBoundary>

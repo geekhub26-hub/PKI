@@ -103,7 +103,7 @@ export default function TopBar() {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+          className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-100 bg-white text-slate-600 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
           aria-label="Notifications"
         >
           <Bell size={16} />
@@ -184,7 +184,7 @@ export default function TopBar() {
 
       {/* Avatar */}
       <div className="flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold text-white"
-        style={{ background: 'linear-gradient(135deg, #1E4A7E, #0A1E3D)' }}>
+        style={{ background: 'linear-gradient(135deg, #065f46, #022c22)' }}>
         {getInitials(user?.firstName, user?.lastName)}
       </div>
     </div>
