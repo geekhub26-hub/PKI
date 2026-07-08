@@ -27,6 +27,7 @@ import UserValidateTokenPage from './pages/UserValidateTokenPage';
 import UserRecepisses from './pages/UserRecepisses';
 import UserProfilePage from './pages/UserProfilePage';
 import DocsPage from './pages/DocsPage';
+import SuccessPage from './pages/SuccessPage';
 import VerifyPage from './pages/VerifyPage';
 import SuperAdminSettingsPage from './pages/SuperAdminSettingsPage';
 import AdminRecepisseStatsPage from './pages/AdminRecepisseStatsPage';
@@ -115,6 +116,7 @@ function App() {
           <Route path="/validate-token" element={<UserValidateTokenPage />} />
           <Route path="/verify" element={<VerifyPage />} />
           <Route path="/verify-email" element={<OtpVerificationPage />} />
+          <Route path="/success" element={<SuccessPage />} />
 
           <Route
             element={
