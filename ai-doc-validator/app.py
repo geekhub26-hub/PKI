@@ -1,6 +1,5 @@
 import os
 import re
-import urllib.request
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -15,40 +14,32 @@ from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 MAX_FILE_SIZE    = int(os.getenv("AI_MAX_FILE_SIZE_BYTES", str(20 * 1024 * 1024)))
 REQUIRED_API_KEY = os.getenv("LOCAL_AI_API_KEY", "").strip()
 MODEL_DIR        = Path(os.getenv("MODEL_DIR", "/tmp/pki-models"))
-COSINE_THRESHOLD = float(os.getenv("FACE_COSINE_THRESHOLD", "0.363"))
+# ArcFace cosine similarity threshold (0–1). Default 0.40 (stricter than SFace 0.363).
+# Increase to be more lenient, decrease to be stricter.
+COSINE_THRESHOLD = float(os.getenv("FACE_COSINE_THRESHOLD", "0.40"))
+# Minimum face area as % of image area — rejects tiny/distant faces in selfies
+MIN_FACE_AREA_RATIO = float(os.getenv("MIN_FACE_AREA_RATIO", "0.03"))
 
-YUNET_URL  = "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
-SFACE_URL  = "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx"
-YUNET_NAME = "face_detection_yunet_2023mar.onnx"
-SFACE_NAME = "face_recognition_sface_2021dec.onnx"
+# ─── Model singleton ──────────────────────────────────────────────────────────
 
-# ─── Model singletons ─────────────────────────────────────────────────────────
-
-_face_detector:   Optional[cv2.FaceDetectorYN]   = None
-_face_recognizer: Optional[cv2.FaceRecognizerSF]  = None
-
-
-def _ensure_model(url: str, name: str) -> str:
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    path = MODEL_DIR / name
-    if not path.exists():
-        print(f"Downloading face model: {name} …")
-        urllib.request.urlretrieve(url, str(path))
-        print(f"Downloaded {name} ({path.stat().st_size // 1024} KB)")
-    return str(path)
+_face_app = None  # insightface FaceAnalysis instance
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _face_detector, _face_recognizer
+    global _face_app
     try:
-        yunet_path = _ensure_model(YUNET_URL, YUNET_NAME)
-        sface_path = _ensure_model(SFACE_URL, SFACE_NAME)
-        _face_detector  = cv2.FaceDetectorYN.create(yunet_path, "", (320, 320))
-        _face_recognizer = cv2.FaceRecognizerSF.create(sface_path, "")
-        print("Face recognition models loaded (YuNet + SFace)")
+        from insightface.app import FaceAnalysis
+        fa = FaceAnalysis(
+            name="buffalo_l",
+            root=str(MODEL_DIR),
+            providers=["CPUExecutionProvider"],
+        )
+        fa.prepare(ctx_id=-1, det_size=(640, 640))
+        _face_app = fa
+        print("InsightFace buffalo_l chargé (ArcFace R50 + SCRFD)")
     except Exception as e:
-        print(f"WARNING: Face models could not be loaded: {e}")
+        print(f"WARNING: InsightFace non disponible: {e}")
     yield
 
 
@@ -56,11 +47,13 @@ app = FastAPI(title="PKI Identity Document Validator", lifespan=lifespan)
 
 # ─── Auth helper ──────────────────────────────────────────────────────────────
 
+
 def _check_api_key(key: str) -> None:
     if REQUIRED_API_KEY and key != REQUIRED_API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
-# ─── OCR helpers (validation de document) ─────────────────────────────────────
+# ─── OCR helpers ──────────────────────────────────────────────────────────────
+
 
 def _contains_any(text: str, keys: Tuple[str, ...]) -> bool:
     return any(k in text for k in keys)
@@ -80,7 +73,7 @@ def _extract_ocr_text(raw: bytes) -> str:
         raise ValueError("Unsupported image format")
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     gray = cv2.bilateralFilter(gray, 9, 75, 75)
-    thr  = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 11)
+    thr = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 11)
     text = pytesseract.image_to_string(thr, lang="eng+fra", config="--oem 3 --psm 6")
     if not text.strip():
         text = pytesseract.image_to_string(gray, lang="eng+fra", config="--oem 3 --psm 6")
@@ -109,7 +102,9 @@ def _classify(text: str, filename: str, expected_type: str) -> Dict:
     cni_conf  = min(1.0, cni_score / 7.0)
     pass_conf = min(1.0, passport_score / 7.0)
 
-    label = "UNKNOWN"; accepted = False; confidence = 0.0
+    label = "UNKNOWN"
+    accepted = False
+    confidence = 0.0
     message = "Document d'identite non detecte"
 
     if expected_type == "CNI":
@@ -136,37 +131,73 @@ def _classify(text: str, filename: str, expected_type: str) -> Dict:
         "scores": {"cni": cni_score, "passport": passport_score},
     }
 
-# ─── Face recognition helpers ─────────────────────────────────────────────────
+# ─── Face helpers ─────────────────────────────────────────────────────────────
 
-def _extract_face_feature(image_bytes: bytes) -> np.ndarray:
-    """Detect the best face in image_bytes and return its SFace embedding."""
-    if _face_detector is None or _face_recognizer is None:
-        raise RuntimeError("Face models not loaded")
+
+def _enhance_document(img: np.ndarray) -> np.ndarray:
+    """CLAHE + sharpening: improves face detection in document headshots."""
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    l = clahe.apply(l)
+    enhanced = cv2.cvtColor(cv2.merge([l, a, b]), cv2.COLOR_LAB2BGR)
+    kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+    return cv2.filter2D(enhanced, -1, kernel)
+
+
+def _extract_embedding(image_bytes: bytes, label: str = "image", document: bool = False) -> np.ndarray:
+    """
+    Detect the best face and return its L2-normalized ArcFace embedding.
+    When document=True, applies contrast enhancement before detection.
+    """
+    if _face_app is None:
+        raise RuntimeError("Modèles de reconnaissance faciale non disponibles")
 
     arr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     if img is None:
         raise ValueError("Format d'image non supporté")
 
-    h, w = img.shape[:2]
-    _face_detector.setInputSize((w, h))
-    _, faces = _face_detector.detect(img)
+    img_h, img_w = img.shape[:2]
+    img_area = img_h * img_w
 
-    if faces is None or len(faces) == 0:
-        raise ValueError("Aucun visage détecté dans l'image")
+    # For document photos: try enhanced version first, fall back to original
+    candidates = [_enhance_document(img), img] if document else [img]
+    faces = []
+    for candidate in candidates:
+        faces = _face_app.get(candidate)
+        if faces:
+            break
 
-    # Keep the face with the highest detection confidence
-    best = max(faces, key=lambda f: float(f[-1]))
-    aligned = _face_recognizer.alignCrop(img, best)
-    return _face_recognizer.feature(aligned)
+    if not faces:
+        raise ValueError(f"Aucun visage détecté dans {label}")
+
+    # Pick the largest face by bounding-box area
+    def face_area(f):
+        x1, y1, x2, y2 = f.bbox
+        return (x2 - x1) * (y2 - y1)
+
+    best = max(faces, key=face_area)
+    area_ratio = face_area(best) / img_area
+
+    # Reject selfies where the face is too small (person too far from camera)
+    if not document and area_ratio < MIN_FACE_AREA_RATIO:
+        raise ValueError(
+            "Visage trop loin de la caméra — rapprochez-vous et centrez votre visage dans l'ovale"
+        )
+
+    return best.normed_embedding  # L2-normalized → cosine = dot product
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
+
 
 @app.get("/health")
 def health():
     return {
         "status": "ok",
-        "face_models": _face_detector is not None and _face_recognizer is not None,
+        "face_models": _face_app is not None,
+        "model": "InsightFace buffalo_l (ArcFace R50 + SCRFD)",
+        "threshold": COSINE_THRESHOLD,
     }
 
 
@@ -216,12 +247,11 @@ async def compare_faces(
     """
     Compare le visage sur la pièce d'identité avec le selfie.
     Retourne {"match": bool, "similarity": float, "message": str}.
-    Utilise OpenCV SFace (cosine similarity, seuil 0.363).
+    Utilise InsightFace ArcFace R50 (cosine similarity, seuil configurable).
     """
     _check_api_key(x_api_key)
 
-    # Si les modèles ne sont pas chargés → mode souple, on laisse passer
-    if _face_detector is None or _face_recognizer is None:
+    if _face_app is None:
         return {
             "match": True,
             "similarity": 0.5,
@@ -237,21 +267,22 @@ async def compare_faces(
         raise HTTPException(status_code=413, detail="Fichier trop volumineux")
 
     try:
-        doc_feat = _extract_face_feature(doc_raw)
+        doc_emb = _extract_embedding(doc_raw, label="la pièce d'identité", document=True)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Pièce d'identité: {e}")
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
     try:
-        selfie_feat = _extract_face_feature(selfie_raw)
+        selfie_emb = _extract_embedding(selfie_raw, label="le selfie", document=False)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Selfie: {e}")
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
-    cosine = float(_face_recognizer.match(doc_feat, selfie_feat, cv2.FaceRecognizerSF.FR_COSINE))
-    match  = cosine > COSINE_THRESHOLD
+    # ArcFace embeddings are L2-normalized → cosine similarity = dot product
+    cosine = float(np.dot(doc_emb, selfie_emb))
+    match  = cosine >= COSINE_THRESHOLD
 
     return {
         "match":      match,
