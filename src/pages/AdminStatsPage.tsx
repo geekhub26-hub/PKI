@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useThemeStore } from '../stores/themeStore';
 import { adminService } from '../services/api';
 import {
   AreaChart, Area,
   LineChart, Line,
   Bar,
-  PieChart, Pie, Cell,
+  PieChart, Pie, Cell, Sector, Label,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ComposedChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid,
@@ -92,6 +93,7 @@ function MetricTile({ icon, label, value, sub, color }: {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function AdminStatsPage() {
+  const { theme } = useThemeStore();
   const [dash,   setDash]    = useState<any>(null);
   const [sys,    setSys]     = useState<any>(null);
   const [certs,  setCerts]   = useState<any[]>([]);
@@ -363,34 +365,65 @@ export default function AdminStatsPage() {
             <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400" />
             <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Statut certificats</h3>
           </div>
-          <p className="mb-3 text-xs text-slate-400">{totalCerts} au total</p>
+          <p className="mb-1 text-xs text-slate-400">Actifs mis en évidence</p>
           {totalCerts === 0 ? (
             <div className="flex h-52 items-center justify-center text-sm text-slate-400">Aucun certificat émis</div>
           ) : (
             <>
-              <div className="h-44">
+              <div className="h-52">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
+                    <Tooltip content={<ChartTooltip />} cursor={false} />
                     <Pie
                       data={certPie}
                       dataKey="value"
                       nameKey="name"
-                      innerRadius={48}
-                      outerRadius={72}
-                      paddingAngle={4}
-                      strokeWidth={0}
+                      innerRadius={54}
+                      outerRadius={74}
+                      paddingAngle={3}
+                      strokeWidth={5}
+                      activeIndex={0}
+                      activeShape={({ outerRadius = 0, ...props }: any) => (
+                        <Sector {...props} outerRadius={(outerRadius as number) + 10} />
+                      )}
                     >
-                      {certPie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
+                      <Label
+                        content={({ viewBox }: any) => {
+                          if (!viewBox || !('cx' in viewBox)) return null;
+                          const { cx, cy } = viewBox;
+                          const labelColor = theme === 'dark' ? '#F1F5F9' : '#0F172A';
+                          return (
+                            <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle">
+                              <tspan
+                                x={cx}
+                                y={(cy as number) - 7}
+                                style={{ fontSize: '22px', fontWeight: 700, fill: labelColor }}
+                              >
+                                {totalCerts}
+                              </tspan>
+                              <tspan
+                                x={cx}
+                                y={(cy as number) + 13}
+                                style={{ fontSize: '11px', fill: '#94A3B8' }}
+                              >
+                                certificats
+                              </tspan>
+                            </text>
+                          );
+                        }}
+                      />
+                      {certPie.map((_, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i]} />
+                      ))}
                     </Pie>
-                    <Tooltip content={<ChartTooltip />} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="mt-3 space-y-2">
+              <div className="mt-1 space-y-2">
                 {certPie.map((item, i) => (
                   <div key={item.name} className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: PIE_COLORS[i] }} />
+                      <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ background: PIE_COLORS[i] }} />
                       <span className="text-slate-600 dark:text-slate-300">{item.name}</span>
                     </div>
                     <span className="font-bold text-slate-800 dark:text-white">
