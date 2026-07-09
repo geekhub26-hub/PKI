@@ -33,6 +33,9 @@ public class CAConfiguration {
     @Column(name = "ca_crl_path")
     public String caCrlPath;
 
+    @Column(name = "keystore_data")
+    public byte[] keystoreData;
+
     @Column(name = "valid_from")
     public LocalDateTime validFrom;
 

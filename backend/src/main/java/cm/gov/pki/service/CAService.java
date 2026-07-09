@@ -29,6 +29,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.FileWriter;
 import java.io.StringReader;
 import java.io.StringWriter;
@@ -127,13 +129,14 @@ public class CAService {
                 pw.writeObject(cert);
             }
 
-            writeCaKeystore(keyPath, kp.getPrivate(), cert);
+            byte[] ksBytes = writeCaKeystore(keyPath, kp.getPrivate(), cert);
 
             // Persist CAConfiguration
                 CAConfiguration cfg = new CAConfiguration();
                 cfg.caName = caName;
                 cfg.caCertPath = certPath.toAbsolutePath().toString();
                 cfg.caKeyPath = keyPath.toAbsolutePath().toString();
+                cfg.keystoreData = ksBytes;
                 cfg.validFrom = LocalDateTime.now();
                 cfg.validUntil = LocalDateTime.now().plusDays(validityDays);
                 cfg.keyAlgorithm = "RSA";
@@ -309,10 +312,12 @@ public class CAService {
             ks.setKeyEntry("ca-key", caPrivateKey, password.toCharArray(), new java.security.cert.Certificate[]{caCert});
 
             Path ksPath = Path.of(caStore, ca.caName.replaceAll("\\s+", "_").toLowerCase() + ".p12");
-            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(ksPath.toFile())) {
-                ks.store(fos, password.toCharArray());
-            }
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ks.store(baos, password.toCharArray());
+            byte[] ksData = baos.toByteArray();
+            Files.write(ksPath, ksData);
             ca.caKeyPath = ksPath.toAbsolutePath().toString();
+            ca.keystoreData = ksData;
             caConfigurationRepository.save(ca);
 
             // Secure: delete plaintext PEM private key after keystore creation
@@ -330,14 +335,16 @@ public class CAService {
         }
     }
 
-    private void writeCaKeystore(Path keystorePath, PrivateKey privateKey, X509Certificate certificate) throws Exception {
+    private byte[] writeCaKeystore(Path keystorePath, PrivateKey privateKey, X509Certificate certificate) throws Exception {
         KeyStore ks = KeyStore.getInstance("PKCS12");
         ks.load(null, null);
         char[] password = keystorePasswordService.getPassword(null);
         ks.setKeyEntry("ca-key", privateKey, password, new java.security.cert.Certificate[]{certificate});
-        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(keystorePath.toFile())) {
-            ks.store(fos, password);
-        }
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ks.store(baos, password);
+        byte[] data = baos.toByteArray();
+        Files.write(keystorePath, data);
+        return data;
     }
 
     private PrivateKey readPrivateKeyFromPem(Path keyPath) throws Exception {
@@ -584,13 +591,14 @@ public class CAService {
                 pw.writeObject(intermediateCert);
             }
 
-            writeCaKeystore(intermediateKeyPath, intermediateKeyPair.getPrivate(), intermediateCert);
+            byte[] ksBytes = writeCaKeystore(intermediateKeyPath, intermediateKeyPair.getPrivate(), intermediateCert);
 
-                // Persister la configuration via le builder (Ã©vite dÃ©pendre des setters Lombok)
+                // Persister la configuration via le builder (évite dépendre des setters Lombok)
                 CAConfiguration cfg = new CAConfiguration();
                 cfg.caName = caName;
                 cfg.caCertPath = intermediateCertPath.toAbsolutePath().toString();
                 cfg.caKeyPath = intermediateKeyPath.toAbsolutePath().toString();
+                cfg.keystoreData = ksBytes;
                 cfg.validFrom = LocalDateTime.now();
                 cfg.validUntil = LocalDateTime.now().plusDays(validityDays);
                 cfg.keyAlgorithm = "RSA";
@@ -695,7 +703,7 @@ public class CAService {
         }
     }
 
-    // Charge la clÃ© privÃ©e pour une CA : tente le PEM puis le PKCS12 keystore (alias 'ca-key').
+    // Charge la clé privée : fichier PEM → fichier PKCS12 → bytes en DB (fallback filesystem éphémère).
     private PrivateKey loadPrivateKeyForCA(CAConfiguration ca) {
         try {
             Path keyPath = Path.of(ca.caKeyPath);
@@ -707,17 +715,40 @@ public class CAService {
                 return readPrivateKeyFromPem(keyPath);
             }
 
-            // Fallback : look for PKCS12 in caStore with same base name
+            // Fallback 1 : chercher le .p12 dans caStore par nom
             String baseName = ca.caName.replaceAll("\\s+", "_").toLowerCase();
             Path ksPath = Path.of(caStore, baseName + ".p12");
             if (Files.exists(ksPath)) {
                 return loadPrivateKeyFromKeystore(ksPath, ca);
             }
 
+            // Fallback 2 : charger depuis la base de données (Render / ephemeral disk)
+            if (ca.keystoreData != null && ca.keystoreData.length > 0) {
+                log.info("Keystore file absent du disque, chargement depuis la DB pour CA: {}", ca.caName);
+                PrivateKey key = loadPrivateKeyFromBytes(ca.keystoreData, ca);
+                // Recréer le fichier sur disque pour les prochains accès
+                try {
+                    Files.createDirectories(ksPath.getParent());
+                    Files.write(ksPath, ca.keystoreData);
+                } catch (Exception ignored) {}
+                return key;
+            }
+
         } catch (Exception e) {
             log.warn("Could not load private key for CA {}: {}", ca.caName, e.getMessage());
         }
         return null;
+    }
+
+    private PrivateKey loadPrivateKeyFromBytes(byte[] ksBytes, CAConfiguration ca) throws Exception {
+        KeyStore ks = KeyStore.getInstance("PKCS12");
+        char[] password = keystorePasswordService.getPassword(ca);
+        ks.load(new ByteArrayInputStream(ksBytes), password);
+        Key key = ks.getKey("ca-key", password);
+        if (key instanceof PrivateKey privateKey) {
+            return privateKey;
+        }
+        throw new RuntimeException("Clé privée CA absente du keystore en base de données");
     }
 
     /**
