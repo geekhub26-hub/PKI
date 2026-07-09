@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import * as tmImage from '@teachablemachine/image';
 import {
   Camera, RefreshCw, CheckCircle, User, Building2,
-  CreditCard, FileText, KeyRound, Upload,
+  CreditCard, FileText, KeyRound, Upload, AlertTriangle, ScanFace,
 } from 'lucide-react';
 import { userService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
@@ -260,9 +260,16 @@ export default function UserGenerateCsrPage() {
     return null;
   };
 
+  // CNI nécessite recto + verso — détecté via le type choisi à l'étape 1 OU via le label IA
+  const needsVerso =
+    identityDocumentType.toUpperCase().includes('CNI') ||
+    Object.values(aiResults).some((r) => r.label.toLowerCase().includes('cni'));
+
   const validateIdentityStep = () => {
     if (files.length === 0) return "Veuillez ajouter au moins une pièce d'identité avant de continuer.";
-    if (!selfieFile) return 'Veuillez ajouter un selfie pour la comparaison.';
+    if (needsVerso && files.length < 2)
+      return 'La CNI doit être soumise recto ET verso. Ajoutez la face arrière de la carte.';
+    if (!selfieFile) return 'Veuillez ajouter un selfie pour la comparaison faciale.';
     return null;
   };
 
@@ -453,7 +460,8 @@ export default function UserGenerateCsrPage() {
             </span>
           </div>
           <p className="mb-5 text-sm text-slate-500 dark:text-slate-400">
-            Importez votre pièce d'identité (CNI ou passeport), puis prenez un selfie pour la comparaison.
+            Importez votre pièce d'identité. <strong className="text-slate-700 dark:text-slate-200">CNI : recto + verso obligatoires.</strong>{' '}
+            Passeport : page photo suffisante. Puis prenez un selfie — votre visage sera comparé à la pièce.
           </p>
 
           {/* Drop zone */}
@@ -488,13 +496,26 @@ export default function UserGenerateCsrPage() {
           {/* Files list */}
           {files.length > 0 && (
             <div className="mb-5 space-y-2">
-              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Pièces ajoutées ({files.length})</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                Pièces ajoutées ({files.length}{needsVerso ? '/2 requis' : ''})
+              </p>
               {files.map((f, idx) => {
                 const ai = aiResults[fileKey(f)];
+                const isCni = needsVerso || ai?.label.toLowerCase().includes('cni');
+                const sideLabel = isCni ? (idx === 0 ? 'RECTO' : 'VERSO') : null;
                 return (
                   <div key={idx} className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5">
                     <div className="flex min-w-0 items-center gap-2">
                       <FileText size={14} className="shrink-0 text-slate-400" />
+                      {sideLabel && (
+                        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                          idx === 0
+                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                            : 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'
+                        }`}>
+                          {sideLabel}
+                        </span>
+                      )}
                       <span className="truncate text-sm text-slate-700 dark:text-slate-300">{f.name}</span>
                       <span className="text-xs text-slate-400">({Math.round(f.size / 1024)} KB)</span>
                       {ai && (
@@ -518,6 +539,32 @@ export default function UserGenerateCsrPage() {
             </div>
           )}
 
+          {/* Bannière verso CNI */}
+          {needsVerso && files.length === 1 && (
+            <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-950/30">
+              <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+              <div>
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                  CNI détectée — verso requis
+                </p>
+                <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+                  La carte nationale d'identité doit être soumise des deux côtés.
+                  Ajoutez une photo de la <strong>face arrière</strong> en cliquant sur la zone ci-dessus.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Confirmation recto-verso complète */}
+          {needsVerso && files.length >= 2 && (
+            <div className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 dark:border-emerald-800/40 dark:bg-emerald-950/30">
+              <CheckCircle size={15} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                CNI recto + verso fournis
+              </p>
+            </div>
+          )}
+
           {/* Selfie section */}
           <canvas ref={canvasRef} className="hidden" />
           <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
@@ -528,8 +575,21 @@ export default function UserGenerateCsrPage() {
               </div>
               {selfieFile && <span className="status-badge status-active">Capturé</span>}
             </div>
+
+            {/* Indicateur de comparaison faciale */}
+            <div className="mb-4 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800/40 dark:bg-blue-950/30">
+              <ScanFace size={18} className="mt-0.5 shrink-0 text-blue-600 dark:text-blue-400" />
+              <div>
+                <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Comparaison faciale automatique</p>
+                <p className="mt-0.5 text-xs text-blue-700 dark:text-blue-400">
+                  Votre selfie sera comparé au visage sur votre pièce d'identité par le système.
+                  Regardez bien la caméra, visage face à l'objectif, sans lunettes ni masque.
+                </p>
+              </div>
+            </div>
+
             <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-              Prenez un selfie avec votre caméra. Votre visage sera comparé à celui de votre pièce d'identité.
+              Prenez un selfie avec votre caméra. Veillez à ce que votre visage soit bien éclairé et centré.
             </p>
 
             {!cameraActive && !selfiePreviewUrl && (
