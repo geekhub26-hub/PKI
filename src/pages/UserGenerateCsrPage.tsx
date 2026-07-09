@@ -54,6 +54,14 @@ export default function UserGenerateCsrPage() {
   const aiRequestIdRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const csrFileRef = useRef<HTMLInputElement | null>(null);
+
+  // Auto-selfie state
+  const [faceDetected, setFaceDetected] = useState(false);
+  const [captureCountdown, setCaptureCountdown] = useState<number | null>(null);
+  const detectIntervalRef = useRef<number | null>(null);
+  const countdownIntervalRef = useRef<number | null>(null);
+  const captureScheduledRef = useRef(false);
+  const detectCanvasRef = useRef<HTMLCanvasElement>(null);
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
 
@@ -184,10 +192,103 @@ export default function UserGenerateCsrPage() {
     }
   }, [cameraActive]);
 
+  // Start face detection once video is playing
+  useEffect(() => {
+    if (cameraActive && videoReady) {
+      startFaceDetection();
+    } else {
+      stopDetection();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraActive, videoReady]);
+
+  // ── Face detection helpers ────────────────────────────────────────────────
+
+  const stopDetection = () => {
+    if (detectIntervalRef.current !== null) {
+      clearInterval(detectIntervalRef.current);
+      detectIntervalRef.current = null;
+    }
+    if (countdownIntervalRef.current !== null) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    captureScheduledRef.current = false;
+    setFaceDetected(false);
+    setCaptureCountdown(null);
+  };
+
   const stopCamera = () => {
+    stopDetection();
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setCameraActive(false); setVideoReady(false);
+  };
+
+  // Sample centre pixels to detect a face-like presence (brightness + variance heuristic)
+  const checkFrameHasFace = (): boolean => {
+    const video = videoRef.current;
+    const canvas = detectCanvasRef.current;
+    if (!video || !canvas || video.videoWidth === 0 || !videoReady) return false;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return false;
+
+    const W = video.videoWidth;
+    const H = video.videoHeight;
+    canvas.width = W; canvas.height = H;
+    ctx.drawImage(video, 0, 0, W, H);
+
+    // Sample a 60×80 block in the centre (where the face guide oval is)
+    const sx = Math.floor(W * 0.3), sy = Math.floor(H * 0.15);
+    const sw = Math.floor(W * 0.4), sh = Math.floor(H * 0.55);
+    const { data } = ctx.getImageData(sx, sy, sw, sh);
+    const n = data.length / 4;
+    if (n === 0) return false;
+
+    let r = 0, g = 0, b = 0;
+    for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; }
+    r /= n; g /= n; b /= n;
+
+    const brightness = (r + g + b) / 3;
+    if (brightness < 45 || brightness > 235) return false; // too dark or blown-out
+
+    // Very loose flesh-tone check: red channel dominant, not monochrome background
+    const hasTone = r > 80 && (r - b) > 10 && Math.abs(r - g) < 80;
+    return hasTone;
+  };
+
+  const startCountdown = () => {
+    if (captureScheduledRef.current) return;
+    captureScheduledRef.current = true;
+    let tick = 3;
+    setCaptureCountdown(tick);
+    countdownIntervalRef.current = window.setInterval(() => {
+      tick -= 1;
+      if (tick <= 0) {
+        clearInterval(countdownIntervalRef.current!);
+        countdownIntervalRef.current = null;
+        captureSelfie(); // auto-capture
+      } else {
+        setCaptureCountdown(tick);
+      }
+    }, 1000);
+  };
+
+  const startFaceDetection = () => {
+    if (detectIntervalRef.current !== null) return;
+    let consecutiveHits = 0;
+    detectIntervalRef.current = window.setInterval(() => {
+      const detected = checkFrameHasFace();
+      setFaceDetected(detected);
+      if (detected) {
+        consecutiveHits++;
+        if (consecutiveHits >= 2) startCountdown(); // 2 × 600 ms = 1.2 s of stable detection
+      } else {
+        consecutiveHits = 0;
+        // Reset countdown if face lost before capture
+        if (!captureScheduledRef.current) setCaptureCountdown(null);
+      }
+    }, 600);
   };
 
   const captureSelfie = () => {
@@ -208,7 +309,7 @@ export default function UserGenerateCsrPage() {
         if (selfiePreviewUrl) URL.revokeObjectURL(selfiePreviewUrl);
         setSelfieFile(file);
         setSelfiePreviewUrl(url);
-        stopCamera();
+        stopCamera(); // stopCamera calls stopDetection internally
       }, 'image/jpeg', 0.92);
     });
   };
@@ -260,10 +361,13 @@ export default function UserGenerateCsrPage() {
     return null;
   };
 
-  // CNI nécessite recto + verso — détecté via le type choisi à l'étape 1 OU via le label IA
-  const needsVerso =
-    identityDocumentType.toUpperCase().includes('CNI') ||
-    Object.values(aiResults).some((r) => r.label.toLowerCase().includes('cni'));
+  // CNI nécessite recto + verso — basé uniquement sur ce que l'IA a détecté dans les fichiers uploadés
+  // (pas sur identityDocumentType qui vaut 'CNI' par défaut)
+  const needsVerso = files.length > 0 &&
+    files.some((f) => {
+      const r = aiResults[fileKey(f)];
+      return r?.ok && r.label.toLowerCase().includes('cni');
+    });
 
   const validateIdentityStep = () => {
     if (files.length === 0) return "Veuillez ajouter au moins une pièce d'identité avant de continuer.";
@@ -565,8 +669,10 @@ export default function UserGenerateCsrPage() {
             </div>
           )}
 
-          {/* Selfie section */}
+          {/* Canvases hidden — capture + face detection */}
           <canvas ref={canvasRef} className="hidden" />
+          <canvas ref={detectCanvasRef} className="hidden" />
+
           <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
             <div className="section-title">
               <div className="flex items-center gap-2">
@@ -604,28 +710,61 @@ export default function UserGenerateCsrPage() {
 
             {cameraActive && (
               <div className="space-y-3">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  onCanPlay={() => setVideoReady(true)}
-                  className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 scale-x-[-1]"
-                />
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={captureSelfie}
-                    disabled={!videoReady}
-                    className="btn btn-green disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Camera size={14} />
-                    {videoReady ? 'Prendre le selfie' : 'Initialisation…'}
-                  </button>
-                  <button type="button" onClick={stopCamera} className="btn btn-primary" style={{ background: 'transparent', border: '2px solid', color: 'inherit' }}>
-                    Annuler
-                  </button>
+                {/* Video + oval overlay */}
+                <div className="relative inline-block w-full max-w-sm">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    onCanPlay={() => setVideoReady(true)}
+                    className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 scale-x-[-1]"
+                  />
+
+                  {/* Oval face guide */}
+                  {videoReady && (
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <div className={`h-48 w-36 rounded-[50%] border-4 transition-all duration-300 ${
+                        captureCountdown !== null
+                          ? 'border-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,0.3)]'
+                          : faceDetected
+                            ? 'border-emerald-400'
+                            : 'border-white/70'
+                      }`} />
+                    </div>
+                  )}
+
+                  {/* Status badge */}
+                  {videoReady && (
+                    <div className="absolute bottom-3 left-0 right-0 flex justify-center">
+                      {captureCountdown !== null ? (
+                        <span className="flex items-center gap-1.5 rounded-full bg-emerald-600/90 px-4 py-1.5 text-sm font-bold text-white shadow-lg">
+                          <Camera size={14} /> Capture dans {captureCountdown}…
+                        </span>
+                      ) : faceDetected ? (
+                        <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/90 px-4 py-1.5 text-sm font-semibold text-white shadow">
+                          <CheckCircle size={14} /> Visage détecté
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5 rounded-full bg-black/60 px-4 py-1.5 text-sm text-white shadow">
+                          <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
+                          Positionnez votre visage dans l'ovale
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Loading overlay before video ready */}
+                  {!videoReady && (
+                    <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-slate-900/60">
+                      <span className="text-sm text-white">Initialisation caméra…</span>
+                    </div>
+                  )}
                 </div>
+
+                <button type="button" onClick={stopCamera} className="text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 underline">
+                  Annuler
+                </button>
               </div>
             )}
 
