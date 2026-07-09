@@ -12,10 +12,12 @@ import cm.gov.pki.service.AuditService;
 import cm.gov.pki.service.EmailService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.security.core.Authentication;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.security.KeyStore;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -242,6 +244,40 @@ public class AdminController {
 		Map<String, String> resp = new HashMap<>();
 		resp.put("crlPath", crlPath.toAbsolutePath().toString());
 		return ResponseEntity.ok(resp);
+	}
+
+	/**
+	 * Restaurer le keystore PKCS12 de l'AC active depuis un fichier uploadé.
+	 * Utile quand le disque Render est éphémère et que les bytes ne sont pas en DB.
+	 */
+	@PostMapping("/ca/restore-keystore")
+	public ResponseEntity<?> restoreCaKeystore(
+			@RequestParam("file") MultipartFile file,
+			@RequestParam("password") String password,
+			Authentication authentication) {
+		if (!(authentication.getPrincipal() instanceof cm.gov.pki.entity.User admin)) {
+			return ResponseEntity.status(401).build();
+		}
+		CAConfiguration ca = caConfigurationRepository.findFirstByIsActiveTrueOrderByCreatedAtDesc()
+				.orElseThrow(() -> new RuntimeException("Aucune AC active"));
+		try {
+			byte[] ksBytes = file.getBytes();
+			// Valider que c'est un PKCS12 valide avec le mot de passe fourni
+			KeyStore ks = KeyStore.getInstance("PKCS12");
+			ks.load(new java.io.ByteArrayInputStream(ksBytes), password.toCharArray());
+			if (!ks.aliases().hasMoreElements()) {
+				return ResponseEntity.badRequest().body(Map.of("error", "Keystore vide ou mot de passe incorrect"));
+			}
+			// Sauvegarder en DB
+			ca.keystoreData = ksBytes;
+			caConfigurationRepository.save(ca);
+			auditService.log(admin, cm.gov.pki.entity.AuditLog.Actions.CA_INITIALIZED, "CAConfiguration", ca.id,
+					java.util.Map.of("action", "RESTORE_KEYSTORE"));
+			return ResponseEntity.ok(Map.of("message", "Keystore restauré avec succès pour l'AC : " + ca.caName));
+		} catch (Exception e) {
+			log.error("Échec restauration keystore", e);
+			return ResponseEntity.badRequest().body(Map.of("error", "Keystore invalide ou mot de passe incorrect : " + e.getMessage()));
+		}
 	}
 
 	@GetMapping("/certificates")

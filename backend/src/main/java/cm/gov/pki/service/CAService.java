@@ -631,7 +631,7 @@ public class CAService {
     }
 
     @Transactional
-    public void revokeCertificate(java.util.UUID certificateId, String reason, cm.gov.pki.entity.User admin) {
+    public void revokeCertificateInDb(java.util.UUID certificateId, String reason, cm.gov.pki.entity.User admin) {
         var opt = certificateRepository.findById(certificateId);
         if (opt.isEmpty()) throw new RuntimeException("Certificate not found");
         var cert = opt.get();
@@ -644,15 +644,20 @@ public class CAService {
             throw new RuntimeException(e);
         }
         certificateRepository.save(cert);
+    }
 
-        // Regenerate CRL and persist
-        CAConfiguration ca = caConfigurationRepository.findFirstByIsActiveTrueOrderByCreatedAtDesc()
-            .orElseThrow(() -> new RuntimeException("No active CA"));
-        try {
-            writeAndPersistCRL(ca);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to persist CRL: " + e.getMessage(), e);
-        }
+    // Wrapper appelé par les contrôleurs : révocation DB toujours commitée,
+    // mise à jour CRL best-effort (clé CA peut être indisponible sur disque éphémère).
+    public void revokeCertificate(java.util.UUID certificateId, String reason, cm.gov.pki.entity.User admin) {
+        revokeCertificateInDb(certificateId, reason, admin);
+
+        caConfigurationRepository.findFirstByIsActiveTrueOrderByCreatedAtDesc().ifPresent(ca -> {
+            try {
+                writeAndPersistCRL(ca);
+            } catch (Exception e) {
+                log.warn("CRL non mise à jour après révocation (clé CA indisponible) : {}", e.getMessage());
+            }
+        });
     }
 
     @Transactional
