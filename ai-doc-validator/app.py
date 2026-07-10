@@ -298,6 +298,12 @@ def _extract_embedding(image_bytes: bytes, label: str, document: bool = False) -
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 
+@app.get("/")
+def root():
+    """Route racine pour le health check Render (GET /)."""
+    return {"service": "PKI AI Validator", "status": "ok"}
+
+
 @app.get("/health")
 def health():
     return {
