@@ -318,10 +318,7 @@ public class IdentityDocumentAiService {
 
         } catch (Exception e) {
             log.warn("Face comparison unavailable: {}", e.getMessage());
-            if (strictMode) {
-                return new FaceComparisonResult(false, 0.0, "Comparaison faciale indisponible en mode strict");
-            }
-            return new FaceComparisonResult(true, 0.5, "Service de comparaison faciale non disponible (mode souple accepté)");
+            return new FaceComparisonResult(false, 0.0, "Service de comparaison faciale indisponible — réessayez dans quelques secondes");
         }
     }
 

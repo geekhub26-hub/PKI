@@ -17,7 +17,7 @@ from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 MAX_FILE_SIZE    = int(os.getenv("AI_MAX_FILE_SIZE_BYTES", str(20 * 1024 * 1024)))
 REQUIRED_API_KEY = os.getenv("LOCAL_AI_API_KEY", "").strip()
 MODEL_DIR        = Path(os.getenv("MODEL_DIR", "/tmp/pki-models"))
-COSINE_THRESHOLD = float(os.getenv("FACE_COSINE_THRESHOLD", "0.40"))
+COSINE_THRESHOLD = float(os.getenv("FACE_COSINE_THRESHOLD", "0.50"))
 # Minimum face bbox area / image area. Rejects tiny faces (person too far).
 MIN_FACE_AREA_RATIO = float(os.getenv("MIN_FACE_AREA_RATIO", "0.03"))
 
@@ -323,11 +323,10 @@ async def compare_faces(
     _check_api_key(x_api_key)
 
     if _face_detector is None or _face_recognizer is None:
-        return {
-            "match": True,
-            "similarity": 0.5,
-            "message": "Modèles de reconnaissance faciale non disponibles (mode souple)",
-        }
+        raise HTTPException(
+            status_code=503,
+            detail="Service de reconnaissance faciale non disponible — réessayez dans quelques secondes",
+        )
 
     doc_raw    = await document.read()
     selfie_raw = await selfie.read()
