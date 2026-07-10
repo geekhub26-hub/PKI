@@ -17,7 +17,7 @@ from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 MAX_FILE_SIZE    = int(os.getenv("AI_MAX_FILE_SIZE_BYTES", str(20 * 1024 * 1024)))
 REQUIRED_API_KEY = os.getenv("LOCAL_AI_API_KEY", "").strip()
 MODEL_DIR        = Path(os.getenv("MODEL_DIR", "/tmp/pki-models"))
-COSINE_THRESHOLD = float(os.getenv("FACE_COSINE_THRESHOLD", "0.50"))
+COSINE_THRESHOLD = float(os.getenv("FACE_COSINE_THRESHOLD", "0.38"))
 # Minimum face bbox area / image area. Rejects tiny faces (person too far).
 MIN_FACE_AREA_RATIO = float(os.getenv("MIN_FACE_AREA_RATIO", "0.03"))
 
