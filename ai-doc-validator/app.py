@@ -169,10 +169,14 @@ def _extract_ocr_text(raw: bytes) -> str:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     gray = cv2.bilateralFilter(gray, 9, 75, 75)
     thr = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 11)
-    text = pytesseract.image_to_string(thr, lang="eng+fra", config="--oem 3 --psm 6")
-    if not text.strip():
-        text = pytesseract.image_to_string(gray, lang="eng+fra", config="--oem 3 --psm 6")
-    return _normalize_text(text)
+    try:
+        text = pytesseract.image_to_string(thr, lang="eng+fra", config="--oem 3 --psm 6")
+        if not text.strip():
+            text = pytesseract.image_to_string(gray, lang="eng+fra", config="--oem 3 --psm 6")
+        return _normalize_text(text)
+    except Exception:
+        # Tesseract not installed on this host — fall back to filename-only classification
+        return ""
 
 
 def _classify(text: str, filename: str, expected_type: str) -> Dict:
