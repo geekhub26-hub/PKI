@@ -486,6 +486,51 @@ export default function UserGenerateCsrPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 py-6">
+      {/* Loading overlay — face comparison / submission */}
+      {submitting && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-black/60 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4 rounded-2xl bg-white px-10 py-8 shadow-2xl dark:bg-slate-900 max-w-sm w-full mx-4 text-center">
+            {/* Spinner */}
+            <div className="relative h-16 w-16">
+              <div className="absolute inset-0 rounded-full border-4 border-blue-100 dark:border-blue-900" />
+              <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-blue-500" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <ScanFace size={22} className="text-blue-500" />
+              </div>
+            </div>
+            {selfieFile ? (
+              <>
+                <p className="text-base font-bold text-slate-800 dark:text-slate-100">
+                  Comparaison faciale en cours…
+                </p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Le système vérifie que votre selfie correspond à votre pièce d'identité.
+                  Cela peut prendre quelques secondes.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-base font-bold text-slate-800 dark:text-slate-100">
+                  Envoi de votre demande…
+                </p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Validation des documents en cours.
+                </p>
+              </>
+            )}
+            <div className="flex gap-1.5 pt-1">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="h-2 w-2 rounded-full bg-blue-400 animate-bounce"
+                  style={{ animationDelay: `${i * 0.15}s` }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="page-header-bar">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -919,7 +964,9 @@ export default function UserGenerateCsrPage() {
             disabled={submitting || !cguAccepted}
           >
             <CheckCircle size={15} />
-            {submitting ? 'Envoi…' : isCsrMode ? 'Soumettre le CSR' : 'Soumettre pour vérification'}
+            {submitting
+              ? (selfieFile ? 'Comparaison faciale…' : 'Envoi…')
+              : isCsrMode ? 'Soumettre le CSR' : 'Soumettre pour vérification'}
           </button>
         )}
       </div>
