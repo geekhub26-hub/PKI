@@ -53,7 +53,10 @@ public class IdentityDocumentAiService {
     @Value("${pki.identity-ai.local.warmup-enabled:true}")
     private boolean localWarmupEnabled;
 
-    private final RestTemplate restTemplate = buildRestTemplate();
+    // Short timeout for Google Vision / warmup pings
+    private final RestTemplate restTemplate    = buildRestTemplate(6_000, 15_000);
+    // Long timeout for local AI face comparison (Render cold start can take 60s)
+    private final RestTemplate localRestTemplate = buildRestTemplate(10_000, 90_000);
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public ValidationResult validateIdentityDocument(MultipartFile file, String expectedType) {
@@ -123,7 +126,7 @@ public class IdentityDocumentAiService {
         });
 
         HttpEntity<MultiValueMap<String, Object>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<String> response = restTemplate.postForEntity(localUrl, entity, String.class);
+        ResponseEntity<String> response = localRestTemplate.postForEntity(localUrl, entity, String.class);
         if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null || response.getBody().isBlank()) {
             throw new IllegalStateException("Local AI service returned " + response.getStatusCode().value());
         }
@@ -158,10 +161,10 @@ public class IdentityDocumentAiService {
         }
     }
 
-    private static RestTemplate buildRestTemplate() {
+    private static RestTemplate buildRestTemplate(int connectMs, int readMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(6000);
-        factory.setReadTimeout(12000);
+        factory.setConnectTimeout(connectMs);
+        factory.setReadTimeout(readMs);
         return new RestTemplate(factory);
     }
 
@@ -281,45 +284,65 @@ public class IdentityDocumentAiService {
      * retourne un résultat accepté en mode souple (strictMode=false).
      */
     public FaceComparisonResult compareFaces(MultipartFile document, MultipartFile selfie) {
-        try {
-            String compareUrl = deriveCompareUrl(localUrl);
-            if (compareUrl == null) throw new IllegalStateException("URL comparaison introuvable");
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-            if (localApiKey != null && !localApiKey.isBlank()) {
-                headers.add("X-API-Key", localApiKey);
-            }
-
-            MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-            body.add("document", new ByteArrayResource(document.getBytes()) {
-                @Override public String getFilename() {
-                    String n = document.getOriginalFilename();
-                    return (n == null || n.isBlank()) ? "document.bin" : n;
-                }
-            });
-            body.add("selfie", new ByteArrayResource(selfie.getBytes()) {
-                @Override public String getFilename() { return "selfie.jpg"; }
-            });
-
-            HttpEntity<MultiValueMap<String, Object>> entity = new HttpEntity<>(body, headers);
-            ResponseEntity<String> response = restTemplate.postForEntity(compareUrl, entity, String.class);
-
-            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                throw new IllegalStateException("compare-faces returned " + response.getStatusCode().value());
-            }
-
-            JsonNode root = objectMapper.readTree(response.getBody());
-            boolean match = root.path("match").asBoolean(false);
-            double similarity = root.path("similarity").asDouble(0.0);
-            String message = root.path("message").asText("Résultat comparaison faciale");
-            log.info("Face comparison: match={} similarity={}", match, similarity);
-            return new FaceComparisonResult(match, similarity, message);
-
-        } catch (Exception e) {
-            log.warn("Face comparison unavailable: {}", e.getMessage());
+        String compareUrl = deriveCompareUrl(localUrl);
+        if (compareUrl == null) {
+            log.warn("Face comparison URL could not be derived from {}", localUrl);
             return new FaceComparisonResult(false, 0.0, "Service de comparaison faciale indisponible — réessayez dans quelques secondes");
         }
+
+        // Pre-read bytes once — MultipartFile stream can only be read once
+        byte[] docBytes, selfieBytes;
+        try {
+            docBytes    = document.getBytes();
+            selfieBytes = selfie.getBytes();
+        } catch (Exception e) {
+            log.warn("Could not read face comparison files: {}", e.getMessage());
+            return new FaceComparisonResult(false, 0.0, "Erreur lecture fichiers — réessayez");
+        }
+
+        int attempts = Math.max(1, localRetries);
+        Exception lastErr = null;
+        for (int attempt = 1; attempt <= attempts; attempt++) {
+            try {
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+                if (localApiKey != null && !localApiKey.isBlank()) {
+                    headers.add("X-API-Key", localApiKey);
+                }
+
+                final byte[] db = docBytes, sb = selfieBytes;
+                final String docName = document.getOriginalFilename();
+                MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+                body.add("document", new ByteArrayResource(db) {
+                    @Override public String getFilename() { return (docName == null || docName.isBlank()) ? "document.bin" : docName; }
+                });
+                body.add("selfie", new ByteArrayResource(sb) {
+                    @Override public String getFilename() { return "selfie.jpg"; }
+                });
+
+                ResponseEntity<String> response = localRestTemplate.postForEntity(
+                        compareUrl, new HttpEntity<>(body, headers), String.class);
+
+                if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                    throw new IllegalStateException("compare-faces HTTP " + response.getStatusCode().value());
+                }
+
+                JsonNode root = objectMapper.readTree(response.getBody());
+                boolean match      = root.path("match").asBoolean(false);
+                double  similarity = root.path("similarity").asDouble(0.0);
+                String  message    = root.path("message").asText("Résultat comparaison faciale");
+                log.info("Face comparison attempt {}/{}: match={} similarity={}", attempt, attempts, match, similarity);
+                return new FaceComparisonResult(match, similarity, message);
+
+            } catch (Exception e) {
+                lastErr = e;
+                log.warn("Face comparison attempt {}/{} failed: {}", attempt, attempts, e.getMessage());
+                if (attempt < attempts) sleepSilently(localRetryDelayMs);
+            }
+        }
+
+        log.warn("Face comparison unavailable after {} attempts: {}", attempts, lastErr != null ? lastErr.getMessage() : "unknown");
+        return new FaceComparisonResult(false, 0.0, "Service de comparaison faciale indisponible — réessayez dans quelques secondes");
     }
 
     private static String deriveCompareUrl(String validateUrl) {
