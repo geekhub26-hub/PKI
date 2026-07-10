@@ -13,11 +13,16 @@ from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
-MAX_FILE_SIZE       = int(os.getenv("AI_MAX_FILE_SIZE_BYTES", str(20 * 1024 * 1024)))
+MAX_FILE_SIZE       = int(os.getenv("AI_MAX_FILE_SIZE_BYTES", str(10 * 1024 * 1024)))
 REQUIRED_API_KEY    = os.getenv("LOCAL_AI_API_KEY", "").strip()
 MODEL_DIR           = Path(os.getenv("MODEL_DIR", "/tmp/pki-models"))
 COSINE_THRESHOLD    = float(os.getenv("FACE_COSINE_THRESHOLD", "0.38"))
 MIN_FACE_AREA_RATIO = float(os.getenv("MIN_FACE_AREA_RATIO", "0.03"))
+MAX_FACE_DIM        = int(os.getenv("MAX_FACE_DIM", "1024"))   # cap images before face processing
+MAX_OCR_DIM         = int(os.getenv("MAX_OCR_DIM", "2000"))    # cap images before OCR
+
+# Limit OpenCV thread pool — reduces idle + peak memory on constrained hosts
+cv2.setNumThreads(2)
 
 YUNET_NAME = "face_detection_yunet_2023mar.onnx"
 SFACE_NAME = "face_recognition_sface_2021dec.onnx"
@@ -36,6 +41,14 @@ _face_detector:   Optional[cv2.FaceDetectorYN]  = None
 _face_recognizer: Optional[cv2.FaceRecognizerSF] = None
 
 _HEADERS = {"User-Agent": "PKI-Validator/1.0 (face-models-download)"}
+
+
+def _shrink(img: np.ndarray, max_dim: int) -> np.ndarray:
+    h, w = img.shape[:2]
+    if max(h, w) <= max_dim:
+        return img
+    scale = max_dim / max(h, w)
+    return cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
 
 
 def _download_bytes(url: str, timeout: int = 90) -> bytes:
@@ -108,8 +121,10 @@ def _normalize_text(text: str) -> str:
 def _extract_ocr_text(raw: bytes) -> str:
     arr = np.frombuffer(raw, np.uint8)
     image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    del arr
     if image is None:
         raise ValueError("Unsupported image format")
+    image = _shrink(image, MAX_OCR_DIM)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     gray = cv2.bilateralFilter(gray, 9, 75, 75)
     thr = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 11)
@@ -202,9 +217,11 @@ def _extract_embedding(image_bytes: bytes, label: str, document: bool = False) -
 
     arr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    del arr
     if img is None:
         raise ValueError("Format d'image non supporté")
 
+    img = _shrink(img, MAX_FACE_DIM)
     img_area = img.shape[0] * img.shape[1]
 
     best = _detect_best_face(_enhance_document(img) if document else img)
