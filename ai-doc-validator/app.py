@@ -1,11 +1,12 @@
 import io
 import os
 import re
+import time
 import urllib.request
 import zipfile
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -21,11 +22,17 @@ COSINE_THRESHOLD = float(os.getenv("FACE_COSINE_THRESHOLD", "0.38"))
 # Minimum face bbox area / image area. Rejects tiny faces (person too far).
 MIN_FACE_AREA_RATIO = float(os.getenv("MIN_FACE_AREA_RATIO", "0.03"))
 
-# YuNet + SFace (alignment) — from OpenCV model zoo
-YUNET_URL  = "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
-SFACE_URL  = "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx"
+# YuNet + SFace — primary: GitHub raw; fallback: jsDelivr CDN mirror
 YUNET_NAME = "face_detection_yunet_2023mar.onnx"
 SFACE_NAME = "face_recognition_sface_2021dec.onnx"
+YUNET_URLS: List[str] = [
+    "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
+    "https://cdn.jsdelivr.net/gh/opencv/opencv_zoo@main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
+]
+SFACE_URLS: List[str] = [
+    "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
+    "https://cdn.jsdelivr.net/gh/opencv/opencv_zoo@main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
+]
 
 # ArcFace MobileNetFaceNet from InsightFace buffalo_sc (~20 MB zip)
 BUFFALO_SC_URL = "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_sc.zip"
@@ -40,29 +47,58 @@ _arcface_input_name: str = ""
 _using_arcface: bool = False
 
 
-def _ensure_model(url: str, name: str) -> str:
+_HEADERS = {"User-Agent": "PKI-Validator/1.0 (face-models-download)"}
+
+
+def _download_bytes(url: str, timeout: int = 90) -> bytes:
+    req = urllib.request.Request(url, headers=_HEADERS)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read()
+
+
+def _ensure_model(urls: List[str], name: str, min_kb: int = 50) -> str:
+    """Download model file, trying each URL in order with retries."""
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     path = MODEL_DIR / name
-    if not path.exists():
-        print(f"Downloading {name} …")
-        urllib.request.urlretrieve(url, str(path))
-        print(f"Downloaded {name} ({path.stat().st_size // 1024} KB)")
-    return str(path)
+
+    # Valid cached file — skip download
+    if path.exists() and path.stat().st_size >= min_kb * 1024:
+        return str(path)
+
+    # Remove incomplete previous download
+    if path.exists():
+        path.unlink()
+
+    last_err: Optional[Exception] = None
+    for url in urls:
+        for attempt in range(1, 3):
+            try:
+                print(f"[attempt {attempt}/2] Downloading {name} from {url} …")
+                data = _download_bytes(url)
+                if len(data) < min_kb * 1024:
+                    raise ValueError(f"File too small ({len(data)} bytes)")
+                path.write_bytes(data)
+                print(f"Downloaded {name} ({path.stat().st_size // 1024} KB)")
+                return str(path)
+            except Exception as e:
+                last_err = e
+                print(f"Failed ({name}, {url}, attempt {attempt}): {e}")
+                if attempt < 2:
+                    time.sleep(5)
+
+    raise RuntimeError(f"Could not download {name} from any URL: {last_err}")
 
 
 def _ensure_arcface() -> Optional[str]:
     """Download ArcFace MBF from buffalo_sc.zip. Returns path or None on failure."""
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     path = MODEL_DIR / ARCFACE_NAME
-    if path.exists():
+    if path.exists() and path.stat().st_size > 1024 * 1024:
         return str(path)
     try:
         print(f"Downloading InsightFace buffalo_sc (~20 MB) for ArcFace upgrade …")
-        buf = io.BytesIO()
-        req = urllib.request.Request(BUFFALO_SC_URL, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            buf.write(resp.read())
-        buf.seek(0)
+        data = _download_bytes(BUFFALO_SC_URL, timeout=120)
+        buf = io.BytesIO(data)
         with zipfile.ZipFile(buf) as zf:
             for name in zf.namelist():
                 if name.endswith(ARCFACE_NAME):
@@ -81,8 +117,8 @@ def _ensure_arcface() -> Optional[str]:
 async def lifespan(app: FastAPI):
     global _face_detector, _face_recognizer, _arcface_session, _arcface_input_name, _using_arcface
     try:
-        yunet_path = _ensure_model(YUNET_URL, YUNET_NAME)
-        sface_path = _ensure_model(SFACE_URL, SFACE_NAME)
+        yunet_path = _ensure_model(YUNET_URLS, YUNET_NAME)
+        sface_path = _ensure_model(SFACE_URLS, SFACE_NAME)
         _face_detector  = cv2.FaceDetectorYN.create(yunet_path, "", (320, 320))
         _face_recognizer = cv2.FaceRecognizerSF.create(sface_path, "")
         print("YuNet + SFace loaded (OpenCV)")
