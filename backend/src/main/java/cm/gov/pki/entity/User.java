@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.GenericGenerator;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -93,8 +94,61 @@ public class User {
 	@Column(name = "avatar_url", columnDefinition = "TEXT")
 	private String avatarUrl;
 
+	@Column(name = "telephone", length = 25)
+	private String telephone;
+
+	@Column(name = "statut_kyc", length = 20)
+	private String statutKyc = "NON_VERIFIE";
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "entite_id")
+	private cm.gov.pki.entity.Entite entite;
+
+	@Column(name = "otp_sms_code", length = 10)
+	private String otpSmsCode;
+
+	@Column(name = "otp_sms_expires_at")
+	private LocalDateTime otpSmsExpiresAt;
+
+	@Column(name = "two_fa_sms_code", length = 10)
+	private String twoFaSmsCode;
+
+	@Column(name = "two_fa_sms_expires_at")
+	private LocalDateTime twoFaSmsExpiresAt;
+
+	@Column(name = "last_activity_at")
+	private LocalDateTime lastActivityAt;
+
+	@Column(name = "refresh_token_hash", length = 64)
+	private String refreshTokenHash;
+
 	public String getAvatarUrl() { return avatarUrl; }
 	public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
+
+	public String getTelephone() { return telephone; }
+	public void setTelephone(String telephone) { this.telephone = telephone; }
+
+	public String getStatutKyc() { return statutKyc; }
+	public void setStatutKyc(String statutKyc) { this.statutKyc = statutKyc; }
+
+	public cm.gov.pki.entity.Entite getEntite() { return entite; }
+	public void setEntite(cm.gov.pki.entity.Entite entite) { this.entite = entite; }
+
+	public String getOtpSmsCode() { return otpSmsCode; }
+	public void setOtpSmsCode(String c) { this.otpSmsCode = c; }
+	public LocalDateTime getOtpSmsExpiresAt() { return otpSmsExpiresAt; }
+	public void setOtpSmsExpiresAt(LocalDateTime t) { this.otpSmsExpiresAt = t; }
+
+	public String getTwoFaSmsCode() { return twoFaSmsCode; }
+	public void setTwoFaSmsCode(String c) { this.twoFaSmsCode = c; }
+	public LocalDateTime getTwoFaSmsExpiresAt() { return twoFaSmsExpiresAt; }
+	public void setTwoFaSmsExpiresAt(LocalDateTime t) { this.twoFaSmsExpiresAt = t; }
+
+	public LocalDateTime getLastActivityAt() { return lastActivityAt; }
+	public void setLastActivityAt(LocalDateTime t) { this.lastActivityAt = t; }
+
+	public String getRefreshTokenHash() { return refreshTokenHash; }
+	public void setRefreshTokenHash(String h) { this.refreshTokenHash = h; }
 
 	public UUID getId() {
 		return this.id;

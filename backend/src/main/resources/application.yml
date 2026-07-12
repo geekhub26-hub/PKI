@@ -68,6 +68,14 @@ pki:
     debug-mode: ${PKI_EMAIL_DEBUG_MODE:false}
     brevo-api-key: ${BREVO_API_KEY:}
 
+  # SMS (Brevo Transactional SMS — même clé API que l'email)
+  sms:
+    sender: ${PKI_SMS_SENDER:ANTIC}
+
+  # Session timeout par inactivité (en minutes)
+  session:
+    timeout-minutes: ${PKI_SESSION_TIMEOUT_MINUTES:30}
+
   # Bootstrap du premier administrateur (laisser vide pour desactiver)
   bootstrap:
     admin:

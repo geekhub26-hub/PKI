@@ -60,6 +60,7 @@ public class RecepissService {
     private final ParametreRepository parametreRepository;
     private final AuditService auditService;
     private final EmailService emailService;
+    private final SmsService smsService;
     private final PdfSigningService pdfSigningService;
 
     @Value("${app.frontend.url:http://localhost:5173}")
@@ -71,6 +72,7 @@ public class RecepissService {
                            ParametreRepository parametreRepository,
                            AuditService auditService,
                            EmailService emailService,
+                           SmsService smsService,
                            PdfSigningService pdfSigningService) {
         this.recepissRepository  = recepissRepository;
         this.requestRepository   = requestRepository;
@@ -78,6 +80,7 @@ public class RecepissService {
         this.parametreRepository = parametreRepository;
         this.auditService        = auditService;
         this.emailService        = emailService;
+        this.smsService          = smsService;
         this.pdfSigningService   = pdfSigningService;
     }
 
@@ -299,6 +302,12 @@ public class RecepissService {
                 } catch (Exception e) {
                     log.warn("Impossible d'envoyer le rappel J-{} pour {} : {}", j, rec.getNumero(), e.getMessage());
                 }
+                if (dem.getTelephone() != null) {
+                    smsService.sendRappelExpiration(
+                        dem.getTelephone(), rec.getNumero(), j,
+                        rec.getDateExpiration().format(DATE_FMT)
+                    );
+                }
             }
         }
     }
@@ -322,6 +331,52 @@ public class RecepissService {
               .append(csv(r.getHashSha256())).append('\n');
         }
         return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /** Export Excel (.xlsx) de tous les récépissés. */
+    public byte[] exportExcel() {
+        List<Recepisse> all = recepissRepository.findAllByOrderByDateGenerationDesc();
+        all.forEach(this::refreshStatutSiExpire);
+
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+            org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("Récépissés");
+
+            // Style en-tête
+            org.apache.poi.ss.usermodel.CellStyle headerStyle = wb.createCellStyle();
+            org.apache.poi.ss.usermodel.Font headerFont = wb.createFont();
+            headerFont.setBold(true);
+            headerStyle.setFont(headerFont);
+            headerStyle.setFillForegroundColor(org.apache.poi.ss.usermodel.IndexedColors.GREY_25_PERCENT.getIndex());
+            headerStyle.setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND);
+
+            String[] headers = {"Numéro", "Nom complet", "Type certificat", "Statut", "Date génération", "Date expiration", "Hash SHA-256"};
+            org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            int rowIdx = 1;
+            for (Recepisse r : all) {
+                org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
+                row.createCell(0).setCellValue(r.getNumero() != null ? r.getNumero() : "");
+                row.createCell(1).setCellValue(r.getNomComplet() != null ? r.getNomComplet() : "");
+                row.createCell(2).setCellValue(r.getTypeCertificat() != null ? r.getTypeCertificat() : "");
+                row.createCell(3).setCellValue(r.getStatut() != null ? r.getStatut() : "");
+                row.createCell(4).setCellValue(r.getDateGeneration() != null ? r.getDateGeneration().format(DATE_FMT) : "");
+                row.createCell(5).setCellValue(r.getDateExpiration() != null ? r.getDateExpiration().format(DATE_FMT) : "");
+                row.createCell(6).setCellValue(r.getHashSha256() != null ? r.getHashSha256() : "");
+            }
+            for (int i = 0; i < headers.length; i++) sheet.autoSizeColumn(i);
+
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            wb.write(out);
+            return out.toByteArray();
+        } catch (Exception e) {
+            log.error("Erreur export Excel récépissés", e);
+            throw new RuntimeException("Impossible de générer l'export Excel", e);
+        }
     }
 
     private static String csv(String v) {
@@ -656,6 +711,13 @@ public class RecepissService {
         } catch (Exception e) {
             log.warn("Notification email non envoyée : {}", e.getMessage());
         }
+        if (rec.getDemandeur().getTelephone() != null) {
+            smsService.sendRecepisseGenere(
+                rec.getDemandeur().getTelephone(),
+                rec.getNumero(),
+                rec.getDateExpiration().format(DATE_FMT)
+            );
+        }
     }
 
     private void notifierRegeneration(Recepisse nouveau, String ancienNumero) {
@@ -670,6 +732,13 @@ public class RecepissService {
             emailService.sendSimpleEmail(nouveau.getDemandeur().getEmail(), subject, body);
         } catch (Exception e) {
             log.warn("Notification regen non envoyée : {}", e.getMessage());
+        }
+        if (nouveau.getDemandeur().getTelephone() != null) {
+            smsService.sendRecepisseGenere(
+                nouveau.getDemandeur().getTelephone(),
+                nouveau.getNumero(),
+                nouveau.getDateExpiration().format(DATE_FMT)
+            );
         }
     }
 }

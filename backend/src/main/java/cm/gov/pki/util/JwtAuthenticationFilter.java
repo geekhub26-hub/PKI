@@ -39,9 +39,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             try {
                 User user = authService.getUserFromToken(token);
                 if (user != null) {
+                    if (!authService.isSessionActive(user)) {
+                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                        response.setContentType("application/json;charset=UTF-8");
+                        response.getWriter().write("{\"error\":\"Session expirée par inactivité. Veuillez vous reconnecter.\"}");
+                        return;
+                    }
                     List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
                     UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(user, null, authorities);
                     SecurityContextHolder.getContext().setAuthentication(auth);
+                    authService.touchActivity(user.getId());
                 }
             } catch (Exception e) {
                 log.debug("JWT invalide: {}", e.getMessage());

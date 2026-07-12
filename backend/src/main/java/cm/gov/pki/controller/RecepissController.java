@@ -91,6 +91,15 @@ public class RecepissController {
                 .body(csv);
     }
 
+    @GetMapping("/admin/recepisses/export/excel")
+    public ResponseEntity<byte[]> exportExcel() {
+        byte[] xlsx = recepissService.exportExcel();
+        return ResponseEntity.ok()
+                .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                .header("Content-Disposition", "attachment; filename=\"recepisses.xlsx\"")
+                .body(xlsx);
+    }
+
     @GetMapping("/admin/recepisses")
     public ResponseEntity<List<Map<String, Object>>> listerTous() {
         List<Map<String, Object>> dtos = recepissService.listerTous().stream()

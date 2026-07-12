@@ -71,27 +71,40 @@ public class AdminController {
 	}
 
 	@GetMapping("/stats")
-	public ResponseEntity<Map<String, Object>> stats() {
+	public ResponseEntity<Map<String, Object>> stats(Authentication authentication) {
 		Map<String, Object> m = new HashMap<>();
-		m.put("users", userRepository.count());
-		m.put("certificates", certificateRepository.count());
-		m.put("certificateRequests", certificateRequestRepository.count());
+		cm.gov.pki.entity.User caller = callerFrom(authentication);
+		java.util.UUID scopeEntiteId = scopeEntiteId(caller);
+		if (scopeEntiteId != null) {
+			m.put("users", userRepository.countByEntite_Id(scopeEntiteId));
+			m.put("certificates", certificateRepository.count());
+			m.put("certificateRequests", certificateRequestRepository.countByStatusInAndUser_Entite_Id(
+				java.util.List.of("PENDING","PENDING_REVIEW","CSR_SUBMITTED","ISSUED","REJECTED"), scopeEntiteId));
+		} else {
+			m.put("users", userRepository.count());
+			m.put("certificates", certificateRepository.count());
+			m.put("certificateRequests", certificateRequestRepository.count());
+		}
 		m.put("activeCA", caConfigurationRepository.findFirstByIsActiveTrueOrderByCreatedAtDesc().isPresent());
 		return ResponseEntity.ok(m);
 	}
 
 	@GetMapping("/dashboard")
-	public ResponseEntity<Map<String, Object>> getDashboard() {
+	public ResponseEntity<Map<String, Object>> getDashboard(Authentication authentication) {
 		try {
 			Map<String, Object> dashboard = new HashMap<>();
-			
-			// Compter les utilisateurs
-			long totalUsers = userRepository.count();
-			
-			// Compter les demandes en attente d'action admin
-			long pendingRequests = certificateRequestRepository.countByStatusIn(
-				java.util.List.of("PENDING", "PENDING_REVIEW", "CSR_SUBMITTED")
-			);
+			java.util.UUID scopeId = scopeEntiteId(callerFrom(authentication));
+
+			long totalUsers = scopeId != null
+				? userRepository.countByEntite_Id(scopeId)
+				: userRepository.count();
+
+			long pendingRequests = scopeId != null
+				? certificateRequestRepository.countByStatusInAndUser_Entite_Id(
+					java.util.List.of("PENDING", "PENDING_REVIEW", "CSR_SUBMITTED"), scopeId)
+				: certificateRequestRepository.countByStatusIn(
+					java.util.List.of("PENDING", "PENDING_REVIEW", "CSR_SUBMITTED")
+				);
 			
 			// Compter les certificats actifs
 			long activeCertificates = certificateRepository.countByStatus(Certificate.CertificateStatus.ACTIVE);
@@ -356,16 +369,24 @@ public class AdminController {
 
 	@GetMapping("/certificate-requests")
 	public ResponseEntity<?> listCertificateRequests(
+			Authentication authentication,
 			@RequestParam(value = "status", required = false) String status,
 			@RequestParam(value = "page", defaultValue = "0") int page,
 			@RequestParam(value = "size", defaultValue = "20") int size) {
 
-		org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(Math.max(0, page), Math.max(1, size), org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "submittedAt"));
+		org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+			Math.max(0, page), Math.max(1, size),
+			org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "submittedAt"));
+		java.util.UUID scopeId = scopeEntiteId(callerFrom(authentication));
 		org.springframework.data.domain.Page<cm.gov.pki.entity.CertificateRequest> resPage;
-		if (status != null && !status.isBlank()) {
-			resPage = certificateRequestRepository.findByStatusIgnoreCase(status.toUpperCase(), pageable);
+		if (scopeId != null) {
+			resPage = (status != null && !status.isBlank())
+				? certificateRequestRepository.findByUserEntiteIdAndStatus(scopeId, status, pageable)
+				: certificateRequestRepository.findByUserEntiteId(scopeId, pageable);
 		} else {
-			resPage = certificateRequestRepository.findAll(pageable);
+			resPage = (status != null && !status.isBlank())
+				? certificateRequestRepository.findByStatusIgnoreCase(status.toUpperCase(), pageable)
+				: certificateRequestRepository.findAll(pageable);
 		}
 		var items = resPage.getContent().stream().map(r -> new CertificateRequestAdminDTO(r)).toList();
 		java.util.Map<String, Object> resp = new java.util.HashMap<>();
@@ -553,15 +574,19 @@ public class AdminController {
 
 	@GetMapping("/users")
 	public ResponseEntity<?> listUsers(
+			Authentication authentication,
 			@RequestParam(value = "page", defaultValue = "0") int page,
 			@RequestParam(value = "size", defaultValue = "20") int size) {
 		try {
 			org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
-				Math.max(0, page), 
-				Math.max(1, size), 
+				Math.max(0, page),
+				Math.max(1, size),
 				org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt")
 			);
-			org.springframework.data.domain.Page<cm.gov.pki.entity.User> usersPage = userRepository.findAll(pageable);
+			java.util.UUID scopeId = scopeEntiteId(callerFrom(authentication));
+			org.springframework.data.domain.Page<cm.gov.pki.entity.User> usersPage = scopeId != null
+				? userRepository.findByEntite_Id(scopeId, pageable)
+				: userRepository.findAll(pageable);
 			var items = usersPage.getContent().stream().map(u -> new UserAdminDTO(u)).toList();
 			java.util.Map<String, Object> resp = new java.util.HashMap<>();
 			resp.put("items", items);
@@ -632,6 +657,128 @@ public class AdminController {
 			log.error("Erreur lors de la suppression de l'utilisateur {}", userId, ex);
 			return ResponseEntity.status(500).body(java.util.Map.of("error", "Erreur serveur: " + ex.getMessage()));
 		}
+	}
+
+	// ── Export Excel ──────────────────────────────────────────────────────────
+
+	@GetMapping("/certificate-requests/export/excel")
+	public ResponseEntity<?> exportRequestsExcel(Authentication authentication) {
+		try {
+			java.util.UUID scopeId = scopeEntiteId(callerFrom(authentication));
+			var all = scopeId != null
+				? certificateRequestRepository.findByUserEntiteId(scopeId,
+					org.springframework.data.domain.Pageable.unpaged()).getContent()
+				: certificateRequestRepository.findAll();
+
+			try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+				org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("Demandes");
+
+				org.apache.poi.ss.usermodel.CellStyle hStyle = wb.createCellStyle();
+				org.apache.poi.ss.usermodel.Font hFont = wb.createFont();
+				hFont.setBold(true);
+				hStyle.setFont(hFont);
+				hStyle.setFillForegroundColor(org.apache.poi.ss.usermodel.IndexedColors.GREY_25_PERCENT.getIndex());
+				hStyle.setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND);
+
+				String[] headers = {"ID", "Demandeur", "Email", "Entité", "Statut", "Soumis le", "Traité le", "Motif rejet"};
+				org.apache.poi.ss.usermodel.Row hRow = sheet.createRow(0);
+				for (int i = 0; i < headers.length; i++) {
+					org.apache.poi.ss.usermodel.Cell c = hRow.createCell(i);
+					c.setCellValue(headers[i]);
+					c.setCellStyle(hStyle);
+				}
+
+				var fmt = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+				int idx = 1;
+				for (var r : all) {
+					org.apache.poi.ss.usermodel.Row row = sheet.createRow(idx++);
+					row.createCell(0).setCellValue(r.getId() != null ? r.getId().toString() : "");
+					String nom = r.getUser() != null ? r.getUser().getFirstName() + " " + r.getUser().getLastName() : "";
+					row.createCell(1).setCellValue(nom);
+					row.createCell(2).setCellValue(r.getUser() != null ? r.getUser().getEmail() : "");
+					String entite = r.getUser() != null && r.getUser().getEntite() != null ? r.getUser().getEntite().getNom() : "";
+					row.createCell(3).setCellValue(entite);
+					row.createCell(4).setCellValue(r.getStatus() != null ? r.getStatus() : "");
+					row.createCell(5).setCellValue(r.getSubmittedAt() != null ? r.getSubmittedAt().format(fmt) : "");
+					row.createCell(6).setCellValue(r.getReviewedAt() != null ? r.getReviewedAt().format(fmt) : "");
+					row.createCell(7).setCellValue(r.getRejectionReason() != null ? r.getRejectionReason() : "");
+				}
+				for (int i = 0; i < headers.length; i++) sheet.autoSizeColumn(i);
+
+				java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+				wb.write(out);
+				return ResponseEntity.ok()
+					.header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+					.header("Content-Disposition", "attachment; filename=\"demandes.xlsx\"")
+					.body(out.toByteArray());
+			}
+		} catch (Exception ex) {
+			log.error("Erreur export Excel demandes", ex);
+			return ResponseEntity.status(500).body(java.util.Map.of("error", "Erreur export"));
+		}
+	}
+
+	// ── Stats avancées ────────────────────────────────────────────────────────
+
+	@GetMapping("/stats/advanced")
+	public ResponseEntity<?> advancedStats(
+			Authentication authentication,
+			@RequestParam(value = "from", required = false) String fromStr,
+			@RequestParam(value = "to", required = false) String toStr,
+			@RequestParam(value = "entiteId", required = false) java.util.UUID entiteId) {
+		try {
+			java.time.LocalDateTime from = fromStr != null
+				? java.time.LocalDate.parse(fromStr).atStartOfDay() : null;
+			java.time.LocalDateTime to = toStr != null
+				? java.time.LocalDate.parse(toStr).atTime(23, 59, 59) : null;
+
+			// Appliquer le scope entité de l'appelant si non SUPER_ADMIN
+			java.util.UUID scopeId = scopeEntiteId(callerFrom(authentication));
+			if (scopeId != null) entiteId = scopeId;
+
+			// Répartition par statut
+			java.util.Map<String, Long> parStatut = new java.util.LinkedHashMap<>();
+			for (Object[] row : certificateRequestRepository.countByStatusGrouped(from, to, entiteId)) {
+				parStatut.put((String) row[0], (Long) row[1]);
+			}
+
+			// Délai moyen de traitement (heures)
+			Double avgH = certificateRequestRepository.avgProcessingHours(from, to);
+
+			// Top 5 entités
+			var top5Pageable = org.springframework.data.domain.PageRequest.of(0, 5);
+			java.util.List<java.util.Map<String, Object>> top5 = new java.util.ArrayList<>();
+			for (Object[] row : certificateRequestRepository.top5EntitesByRequests(from, to, top5Pageable)) {
+				java.util.Map<String, Object> e = new java.util.LinkedHashMap<>();
+				e.put("entite", row[0]);
+				e.put("count", row[1]);
+				top5.add(e);
+			}
+
+			java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+			result.put("parStatut", parStatut);
+			result.put("delaiMoyenHeures", avgH != null ? Math.round(avgH * 10.0) / 10.0 : null);
+			result.put("top5Entites", top5);
+			return ResponseEntity.ok(result);
+		} catch (Exception ex) {
+			log.error("Erreur stats avancées", ex);
+			return ResponseEntity.status(500).body(java.util.Map.of("error", "Erreur serveur"));
+		}
+	}
+
+	// ── Helpers isolation entité ──────────────────────────────────────────────
+
+	private cm.gov.pki.entity.User callerFrom(Authentication authentication) {
+		if (authentication != null && authentication.getPrincipal() instanceof cm.gov.pki.entity.User u) return u;
+		return null;
+	}
+
+	/** Retourne l'entite_id à utiliser comme scope, ou null si l'utilisateur voit tout. */
+	private java.util.UUID scopeEntiteId(cm.gov.pki.entity.User caller) {
+		if (caller == null) return null;
+		cm.gov.pki.entity.User.UserRole role = caller.getRole();
+		if (role == cm.gov.pki.entity.User.UserRole.SUPER_ADMIN || role == cm.gov.pki.entity.User.UserRole.ADMIN) return null;
+		return caller.getEntite() != null ? caller.getEntite().getId() : null;
 	}
 
 	// DTO for admin user management

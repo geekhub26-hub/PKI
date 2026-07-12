@@ -30,16 +30,23 @@ public class AuthService {
     private final UserRepository userRepository;
     private final AuditService auditService;
     private final EmailService emailService;
+    private final SmsService smsService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder(12);
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     @Autowired
-    public AuthService(UserRepository userRepository, AuditService auditService, EmailService emailService) {
+    public AuthService(UserRepository userRepository, AuditService auditService,
+                       EmailService emailService, SmsService smsService) {
         this.userRepository = userRepository;
         this.auditService = auditService;
         this.emailService = emailService;
+        this.smsService = smsService;
     }
+
+    // Durée d'inactivité avant expiration de session (en minutes, configurable)
+    @Value("${pki.session.timeout-minutes:30}")
+    private int sessionTimeoutMinutes;
 
     @Value("${pki.jwt.secret}")
     private String jwtSecret;
@@ -74,6 +81,9 @@ public class AuthService {
                 .build();
         user.setOtpCode(otp);
         user.setOtpExpiresAt(LocalDateTime.now().plusMinutes(15));
+        if (request.getTelephone() != null && !request.getTelephone().isBlank()) {
+            user.setTelephone(request.getTelephone().trim());
+        }
 
         user = userRepository.save(user);
 
@@ -84,6 +94,10 @@ public class AuthService {
             + "Votre code de vérification est : " + otp + "\n\n"
             + "Ce code expire dans 15 minutes.\n\nCordialement,\nL'équipe ANTIC"
         );
+        // Envoi SMS en parallèle (best-effort)
+        if (user.getTelephone() != null) {
+            smsService.sendOtp(user.getTelephone(), otp, user.getFirstName());
+        }
 
         auditService.log(user, "USER_REGISTER", "User", user.getId(), null);
         log.info("✅ Utilisateur créé, OTP envoyé : {}", user.getEmail());
@@ -125,6 +139,9 @@ public class AuthService {
             "Nouveau code de vérification ANTIC PKI",
             "Bonjour " + user.getFirstName() + ",\n\nVotre nouveau code : " + otp + "\n\nExpire dans 15 min.\n\nANTIC"
         );
+        if (user.getTelephone() != null) {
+            smsService.sendOtp(user.getTelephone(), otp, user.getFirstName());
+        }
     }
 
     /**
@@ -166,7 +183,7 @@ public class AuthService {
             user.setTwoFaCode(code);
             user.setTwoFaExpiresAt(LocalDateTime.now().plusMinutes(10));
             userRepository.save(user);
-            boolean sent = emailService.sendSimpleEmail(
+            boolean emailSent = emailService.sendSimpleEmail(
                 user.getEmail(),
                 "Code de connexion ANTIC PKI (2FA)",
                 "Bonjour " + user.getFirstName() + ",\n\n"
@@ -174,8 +191,12 @@ public class AuthService {
                 + "Ce code expire dans 10 minutes.\n\n"
                 + "Si vous n'avez pas tenté de vous connecter, ignorez ce message.\n\nANTIC"
             );
-            if (!sent) {
-                throw new RuntimeException("Impossible d'envoyer le code 2FA par email. Vérifiez la configuration SMTP du serveur.");
+            // Envoi SMS 2FA (best-effort, ne bloque pas si l'email a réussi)
+            if (user.getTelephone() != null) {
+                smsService.send2Fa(user.getTelephone(), code);
+            }
+            if (!emailSent && user.getTelephone() == null) {
+                throw new RuntimeException("Impossible d'envoyer le code 2FA. Vérifiez la configuration SMTP du serveur.");
             }
             String pendingToken = generatePendingToken(user);
             log.info("2FA envoyé à l'admin : {}", user.getEmail());
@@ -395,6 +416,26 @@ public class AuthService {
         emailService.sendPasswordResetConfirmationEmail(user.getEmail(), user.getFirstName());
 
         log.info("Mot de passe réinitialisé avec succès pour: {}", user.getEmail());
+    }
+
+    /**
+     * Vérifie si la session est encore active (inactivité < sessionTimeoutMinutes).
+     * Retourne false si le compte est considéré expiré par inactivité.
+     */
+    public boolean isSessionActive(User user) {
+        LocalDateTime lastActivity = user.getLastActivityAt();
+        if (lastActivity == null) return true; // première requête après login
+        return lastActivity.isAfter(LocalDateTime.now().minusMinutes(sessionTimeoutMinutes));
+    }
+
+    /** Met à jour lastActivityAt (best-effort, ne lève pas d'exception). */
+    @Transactional
+    public void touchActivity(UUID userId) {
+        try {
+            userRepository.touchLastActivity(userId, LocalDateTime.now());
+        } catch (Exception e) {
+            log.debug("touchActivity échoué pour {} : {}", userId, e.getMessage());
+        }
     }
 
     private String generateOtp() {

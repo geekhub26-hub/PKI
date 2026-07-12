@@ -48,6 +48,9 @@ public class AuthDTO {
         @Size(max = 100)
         private String lastName;
 
+        // Optionnel à l'inscription — requis pour OTP SMS si fourni
+        private String telephone;
+
         public RegisterRequest() {}
         public RegisterRequest(String email, String password, String firstName, String lastName) {
             this.email = email;
@@ -63,6 +66,8 @@ public class AuthDTO {
         public void setFirstName(String firstName) { this.firstName = firstName; }
         public String getLastName() { return this.lastName; }
         public void setLastName(String lastName) { this.lastName = lastName; }
+        public String getTelephone() { return telephone; }
+        public void setTelephone(String telephone) { this.telephone = telephone; }
     }
 
     public static class JwtResponse {
