@@ -14,6 +14,7 @@ export default function RegisterPage() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [telephone, setTelephone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [accepted, setAccepted] = useState(false);
@@ -35,7 +36,7 @@ export default function RegisterPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await authService.register({ email, password, firstName, lastName });
+      const res = await authService.register({ email, password, firstName, lastName, telephone: telephone || undefined });
       navigate(`/verify-email?email=${encodeURIComponent(res.email)}`, { replace: true });
     } catch (err: any) {
       setError(err.message || "Erreur lors de l'inscription.");
@@ -151,6 +152,19 @@ export default function RegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                className={inputClass}
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                Téléphone <span className="text-gray-400 text-xs font-normal">(optionnel — pour recevoir l'OTP par SMS)</span>
+              </label>
+              <input
+                type="tel"
+                placeholder="+237 6XX XXX XXX"
+                value={telephone}
+                onChange={(e) => setTelephone(e.target.value)}
                 className={inputClass}
               />
             </div>

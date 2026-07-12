@@ -121,6 +121,7 @@ export interface RegisterRequest {
   password: string;
   firstName: string;
   lastName: string;
+  telephone?: string;
 }
 
 export interface JwtResponse {
@@ -576,6 +577,31 @@ export const adminService = {
 
   deleteUser: async (userId: string): Promise<any> => {
     const response = await apiClient.delete<any>(`/admin/users/${userId}`);
+    return response.data;
+  },
+
+  // URLs de téléchargement directs (avec token dans header via intercepteur)
+  exportRequestsExcelUrl: (): string =>
+    `${API_BASE_URL_CLEAN}/admin/certificate-requests/export/excel`,
+
+  exportRecepissesCsvUrl: (): string =>
+    `${API_BASE_URL_CLEAN}/admin/recepisses/export`,
+
+  exportRecepissesExcelUrl: (): string =>
+    `${API_BASE_URL_CLEAN}/admin/recepisses/export/excel`,
+
+  downloadExport: async (url: string, filename: string): Promise<void> => {
+    const response = await apiClient.get(url, { responseType: 'blob' });
+    const href = window.URL.createObjectURL(response.data as Blob);
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = filename;
+    a.click();
+    window.URL.revokeObjectURL(href);
+  },
+
+  getAdvancedStats: async (params?: { from?: string; to?: string; entiteId?: string }): Promise<any> => {
+    const response = await apiClient.get('/admin/stats/advanced', { params });
     return response.data;
   },
 };

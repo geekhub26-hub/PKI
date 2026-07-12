@@ -9,7 +9,7 @@ import {
   BarChart3, Users, Building2, PencilLine,
   RefreshCw, XCircle, Download, CheckCircle2,
   Clock3, ShieldCheck, AlertTriangle, ChevronRight,
-  Zap, CalendarClock, KeyRound, FileCheck2,
+  Zap, CalendarClock, KeyRound, FileCheck2, FileSpreadsheet,
 } from 'lucide-react';
 
 export default function DashboardAdminPage() {
@@ -222,6 +222,24 @@ export default function DashboardAdminPage() {
               <span className="flex-1">Gérer utilisateurs</span>
               <ChevronRight size={14} className="text-slate-400" />
             </Link>
+            <button
+              type="button"
+              className="action-row w-full text-left"
+              onClick={() => adminService.downloadExport(adminService.exportRequestsExcelUrl(), 'demandes.xlsx')}
+            >
+              <div className="action-row-icon green"><FileSpreadsheet size={15} /></div>
+              <span className="flex-1">Exporter demandes (Excel)</span>
+              <Download size={14} className="text-slate-400" />
+            </button>
+            <button
+              type="button"
+              className="action-row w-full text-left"
+              onClick={() => adminService.downloadExport(adminService.exportRecepissesExcelUrl(), 'recepisses.xlsx')}
+            >
+              <div className="action-row-icon green"><FileSpreadsheet size={15} /></div>
+              <span className="flex-1">Exporter récépissés (Excel)</span>
+              <Download size={14} className="text-slate-400" />
+            </button>
           </div>
         </div>
       </div>
