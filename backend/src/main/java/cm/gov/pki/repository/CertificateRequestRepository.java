@@ -31,11 +31,14 @@ public interface CertificateRequestRepository extends JpaRepository<CertificateR
 
     long countByStatusInAndUser_Entite_Id(java.util.Collection<String> statuses, UUID entiteId);
 
-    // Stats avancées : délai moyen de traitement (en heures) pour les demandes traitées
+    // Stats avancées : délai moyen de traitement (en heures) — native SQL pour EXTRACT(EPOCH)
     @org.springframework.data.jpa.repository.Query(
-        "select avg(function('EXTRACT', 'EPOCH', r.reviewedAt) - function('EXTRACT', 'EPOCH', r.submittedAt)) / 3600.0 " +
-        "from CertificateRequest r where r.reviewedAt is not null and r.submittedAt is not null " +
-        "and (:from is null or r.submittedAt >= :from) and (:to is null or r.submittedAt <= :to)")
+        value = "SELECT AVG(EXTRACT(EPOCH FROM (reviewed_at - submitted_at)) / 3600.0) " +
+                "FROM certificate_requests " +
+                "WHERE reviewed_at IS NOT NULL AND submitted_at IS NOT NULL " +
+                "AND (CAST(:from AS timestamp) IS NULL OR submitted_at >= :from) " +
+                "AND (CAST(:to AS timestamp) IS NULL OR submitted_at <= :to)",
+        nativeQuery = true)
     Double avgProcessingHours(
         @org.springframework.data.repository.query.Param("from") java.time.LocalDateTime from,
         @org.springframework.data.repository.query.Param("to") java.time.LocalDateTime to);
