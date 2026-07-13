@@ -9,7 +9,7 @@ import {
   BarChart3, Users, Building2, PencilLine,
   RefreshCw, XCircle, Download, CheckCircle2,
   Clock3, ShieldCheck, AlertTriangle, ChevronRight,
-  Zap, CalendarClock, KeyRound, FileCheck2, FileSpreadsheet,
+  Zap, CalendarClock, KeyRound, FileCheck2, FileSpreadsheet, FileText,
 } from 'lucide-react';
 
 export default function DashboardAdminPage() {
@@ -240,6 +240,20 @@ export default function DashboardAdminPage() {
               <span className="flex-1">Exporter récépissés (Excel)</span>
               <Download size={14} className="text-slate-400" />
             </button>
+            <button
+              type="button"
+              className="action-row w-full text-left"
+              onClick={() => adminService.downloadExport(adminService.exportStatsPdfUrl(), 'dashboard-pki.pdf')}
+            >
+              <div className="action-row-icon red"><FileText size={15} /></div>
+              <span className="flex-1">Exporter tableau de bord (PDF)</span>
+              <Download size={14} className="text-slate-400" />
+            </button>
+            <Link to="/admin/entites" className="action-row">
+              <div className="action-row-icon violet"><Building2 size={15} /></div>
+              <span className="flex-1">Gérer les entités</span>
+              <ChevronRight size={14} className="text-slate-400" />
+            </Link>
           </div>
         </div>
       </div>

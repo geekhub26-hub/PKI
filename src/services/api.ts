@@ -590,6 +590,9 @@ export const adminService = {
   exportRecepissesExcelUrl: (): string =>
     `${API_BASE_URL_CLEAN}/admin/recepisses/export/excel`,
 
+  exportStatsPdfUrl: (): string =>
+    `${API_BASE_URL_CLEAN}/admin/stats/export/pdf`,
+
   downloadExport: async (url: string, filename: string): Promise<void> => {
     const response = await apiClient.get(url, { responseType: 'blob' });
     const href = window.URL.createObjectURL(response.data as Blob);
@@ -603,6 +606,30 @@ export const adminService = {
   getAdvancedStats: async (params?: { from?: string; to?: string; entiteId?: string }): Promise<any> => {
     const response = await apiClient.get('/admin/stats/advanced', { params });
     return response.data;
+  },
+
+  // Entités
+  listEntites: async (): Promise<any[]> => {
+    const r = await apiClient.get<any[]>('/admin/entites');
+    return r.data;
+  },
+  createEntite: async (body: { code: string; nom: string; type: string; parentId?: string }): Promise<any> => {
+    const r = await apiClient.post('/admin/entites', body);
+    return r.data;
+  },
+  updateEntite: async (id: string, body: Partial<{ nom: string; type: string; isActive: string }>): Promise<any> => {
+    const r = await apiClient.put(`/admin/entites/${id}`, body);
+    return r.data;
+  },
+  deactivateEntite: async (id: string): Promise<void> => {
+    await apiClient.delete(`/admin/entites/${id}`);
+  },
+  createAdminUser: async (body: {
+    email: string; firstName: string; lastName: string;
+    role: string; entiteId?: string; telephone?: string;
+  }): Promise<any> => {
+    const r = await apiClient.post('/admin/users/create-admin', body);
+    return r.data;
   },
 };
 
