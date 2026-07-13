@@ -212,7 +212,8 @@ public class AuthService {
         if (user.isAdmin()) {
             String code = generateOtp();
             user.setTwoFaCode(code);
-            user.setTwoFaExpiresAt(LocalDateTime.now().plusMinutes(10));
+            int twoFaMinutes = readIntParam("two_fa_expiry_minutes", 30);
+            user.setTwoFaExpiresAt(LocalDateTime.now().plusMinutes(twoFaMinutes));
             userRepository.save(user);
             boolean emailSent = emailService.sendSimpleEmail(
                 user.getEmail(),
@@ -552,12 +553,13 @@ public class AuthService {
     }
 
     private String generatePendingToken(User user) {
+        int twoFaMinutes = readIntParam("two_fa_expiry_minutes", 30);
         Date now = new Date();
         return Jwts.builder()
                 .subject(user.getId().toString())
                 .claim("type", "2FA_PENDING")
                 .issuedAt(now)
-                .expiration(new Date(now.getTime() + 10 * 60 * 1000L))
+                .expiration(new Date(now.getTime() + (long) twoFaMinutes * 60 * 1000L))
                 .signWith(getSigningKey())
                 .compact();
     }
