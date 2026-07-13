@@ -23,6 +23,7 @@ class AppState extends ChangeNotifier {
 
   List<CertificateRequestItem> requests = [];
   List<CertificateItem> certificates = [];
+  List<RecepissItem> recepisses = [];
   Set<String> seenNotifications = {};
   Set<String> dismissedNotifications = {};
 
@@ -57,14 +58,13 @@ class AppState extends ChangeNotifier {
     if (_token == null) return;
     try {
       requests = await api.getMyRequests(_token!);
-    } catch (_) {
-      // Keep previous data when backend is temporarily unavailable.
-    }
+    } catch (_) {}
     try {
       certificates = await api.getMyCertificates(_token!);
-    } catch (_) {
-      // Keep previous data when backend is temporarily unavailable.
-    }
+    } catch (_) {}
+    try {
+      recepisses = await api.getMyRecepisses(_token!);
+    } catch (_) {}
     notifyListeners();
   }
 
@@ -103,6 +103,7 @@ class AppState extends ChangeNotifier {
     user = null;
     requests = [];
     certificates = [];
+    recepisses = [];
     seenNotifications = {};
     dismissedNotifications = {};
     final prefs = await SharedPreferences.getInstance();
@@ -224,11 +225,58 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> verifyOtp(String email, String code) async {
+    loading = true;
+    notifyListeners();
+    try {
+      await api.verifyOtp(email, code);
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> forgotPassword(String email) async {
+    loading = true;
+    notifyListeners();
+    try {
+      await api.forgotPassword(email);
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateProfile({required String firstName, required String lastName}) async {
+    if (_token == null) throw ApiException('Session invalide');
+    loading = true;
+    notifyListeners();
+    try {
+      user = await api.updateProfile(_token!, firstName: firstName, lastName: lastName);
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> changePassword({required String oldPassword, required String newPassword}) async {
+    if (_token == null) throw ApiException('Session invalide');
+    loading = true;
+    notifyListeners();
+    try {
+      await api.changePassword(_token!, oldPassword: oldPassword, newPassword: newPassword);
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
   String exportStateSnapshot() {
     return jsonEncode({
       'user': user?.email,
       'requests': requests.length,
       'certificates': certificates.length,
+      'recepisses': recepisses.length,
       'unreadNotifications': unreadCount,
     });
   }

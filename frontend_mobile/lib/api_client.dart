@@ -185,4 +185,88 @@ class ApiClient {
     if (res.statusCode >= 400) throw ApiException(_extractError(utf8.decode(res.bodyBytes)));
     return res.bodyBytes;
   }
+
+  Future<void> verifyOtp(String email, String code) async {
+    final res = await _safePost(
+      _uri('/auth/verify-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'code': code}),
+    );
+    if (res.statusCode >= 400) throw ApiException(_extractError(res.body));
+  }
+
+  Future<void> resendOtp(String email) async {
+    final res = await _safePost(
+      _uri('/auth/resend-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email}),
+    );
+    if (res.statusCode >= 400) throw ApiException(_extractError(res.body));
+  }
+
+  Future<void> forgotPassword(String email) async {
+    final res = await _safePost(
+      _uri('/auth/forgot-password'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email}),
+    );
+    if (res.statusCode >= 400) throw ApiException(_extractError(res.body));
+  }
+
+  Future<void> resetPassword(String token, String newPassword) async {
+    final res = await _safePost(
+      _uri('/auth/reset-password'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'token': token, 'newPassword': newPassword}),
+    );
+    if (res.statusCode >= 400) throw ApiException(_extractError(res.body));
+  }
+
+  Future<List<RecepissItem>> getMyRecepisses(String token) async {
+    final res = await _safeGet(
+      _uri('/user/recepisses'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (res.statusCode >= 400) throw ApiException(_extractError(res.body));
+    final arr = jsonDecode(res.body) as List<dynamic>;
+    return arr.map((e) => RecepissItem.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  String getRecepisseDownloadUrl(String token, String recepissId) {
+    return '$baseUrl/user/recepisses/$recepissId/download';
+  }
+
+  Future<List<int>> downloadRecepisse(String token, String recepissId) async {
+    final res = await _safeGet(
+      _uri('/user/recepisses/$recepissId/download'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (res.statusCode >= 400) throw ApiException(_extractError(utf8.decode(res.bodyBytes)));
+    return res.bodyBytes;
+  }
+
+  Future<AppUser> updateProfile(String token, {required String firstName, required String lastName}) async {
+    final res = await _safePost(
+      _uri('/user/profile'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'firstName': firstName, 'lastName': lastName}),
+    );
+    if (res.statusCode >= 400) throw ApiException(_extractError(res.body));
+    return AppUser.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  Future<void> changePassword(String token, {required String oldPassword, required String newPassword}) async {
+    final res = await _safePost(
+      _uri('/user/change-password'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'oldPassword': oldPassword, 'newPassword': newPassword}),
+    );
+    if (res.statusCode >= 400) throw ApiException(_extractError(res.body));
+  }
 }

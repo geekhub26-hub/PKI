@@ -734,8 +734,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         const Expanded(child: Text('Password', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFEAF0FF)))),
                         TextButton(
-                          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password reset will be available soon.'))),
-                          child: const Text('Forgot your password?'),
+                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())),
+                          child: const Text('Mot de passe oublié ?'),
                         ),
                       ],
                     ),
@@ -750,7 +750,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                 await state.login(_email.text.trim(), _password.text);
                               } catch (e) {
                                 if (!mounted) return;
-                                setState(() => _error = e.toString());
+                                final msg = e.toString();
+                                if (msg.contains('2FA') || msg.contains('Token absent')) {
+                                  setState(() => _error = 'Compte administrateur : utilisez l\'interface web pour vous connecter (2FA requis).');
+                                } else {
+                                  setState(() => _error = msg);
+                                }
                               }
                             },
                       style: FilledButton.styleFrom(
@@ -911,9 +916,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         final first = parts.isEmpty ? '' : parts.first;
                         final last = parts.length > 1 ? parts.sublist(1).join(' ') : '';
                         try {
-                          await state.register(first, last, _email.text.trim(), _password.text);
+                          final email = _email.text.trim();
+                          await state.register(first, last, email, _password.text);
                           if (!mounted) return;
-                          setState(() => _message = 'Compte cree. Connectez-vous.');
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (_) => OtpVerificationScreen(email: email)),
+                          );
                         } catch (e) {
                           if (!mounted) return;
                           setState(() => _error = e.toString());
@@ -991,8 +1000,8 @@ class _HomeShellState extends State<HomeShell> {
     DashboardPage(),
     RequestsPage(),
     CertificatesPage(),
-    NewRequestPage(),
-    SettingsPage(),
+    RecepissesPage(),
+    ProfilePage(),
   ];
 
   @override
@@ -1043,8 +1052,8 @@ class _HomeShellState extends State<HomeShell> {
                     NavigationRailDestination(icon: Icon(Icons.dashboard_outlined), label: Text('Accueil')),
                     NavigationRailDestination(icon: Icon(Icons.list_alt_outlined), label: Text('Demandes')),
                     NavigationRailDestination(icon: Icon(Icons.workspace_premium_outlined), label: Text('Certifs')),
-                    NavigationRailDestination(icon: Icon(Icons.badge_outlined), label: Text('Identity')),
-                    NavigationRailDestination(icon: Icon(Icons.settings_outlined), label: Text('Settings')),
+                    NavigationRailDestination(icon: Icon(Icons.receipt_long_outlined), label: Text('Récépissés')),
+                    NavigationRailDestination(icon: Icon(Icons.person_outlined), label: Text('Profil')),
                   ],
                 ),
                 const VerticalDivider(width: 1),
@@ -1058,11 +1067,11 @@ class _HomeShellState extends State<HomeShell> {
               selectedIndex: index,
               onDestinationSelected: (v) => setState(() => index = v),
               destinations: const [
-                NavigationDestination(icon: Icon(Icons.dashboard_outlined), label: 'Dashboard'),
+                NavigationDestination(icon: Icon(Icons.dashboard_outlined), label: 'Accueil'),
                 NavigationDestination(icon: Icon(Icons.list_alt_outlined), label: 'Demandes'),
-                NavigationDestination(icon: Icon(Icons.workspace_premium_outlined), label: 'Certificates'),
-                NavigationDestination(icon: Icon(Icons.badge_outlined), label: 'Identity'),
-                NavigationDestination(icon: Icon(Icons.settings_outlined), label: 'Settings'),
+                NavigationDestination(icon: Icon(Icons.workspace_premium_outlined), label: 'Certificats'),
+                NavigationDestination(icon: Icon(Icons.receipt_long_outlined), label: 'Récépissés'),
+                NavigationDestination(icon: Icon(Icons.person_outlined), label: 'Profil'),
               ],
             ),
       ),
@@ -1210,7 +1219,7 @@ class DashboardPage extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               FilledButton(
-                onPressed: () => goHomeTab(context, 3),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NewRequestPage())),
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFFB7C5FF),
                   foregroundColor: const Color(0xFF10214D),
@@ -1218,7 +1227,7 @@ class DashboardPage extends StatelessWidget {
                   minimumSize: const Size(170, 52),
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                 ),
-                child: const Text('New Request', style: TextStyle(fontWeight: FontWeight.w800)),
+                child: const Text('Nouvelle demande', style: TextStyle(fontWeight: FontWeight.w800)),
               ),
             ],
           ),
@@ -3108,12 +3117,634 @@ class SettingsPage extends StatelessWidget {
                   side: const BorderSide(color: Color(0xFFFF9A9A)),
                   foregroundColor: const Color(0xFFFFB5B5),
                 ),
-                child: const Text('Logout'),
+                child: const Text('Déconnexion'),
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─── OTP Verification ────────────────────────────────────────────────────────
+
+class OtpVerificationScreen extends StatefulWidget {
+  final String email;
+  const OtpVerificationScreen({super.key, required this.email});
+
+  @override
+  State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
+}
+
+class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
+  final _code = TextEditingController();
+  String? _error;
+  String? _message;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    return Scaffold(
+      backgroundColor: const Color(0xFF050B24),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 430),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0A1748),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFF2A4A8D)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Icon(Icons.mark_email_read_outlined, size: 52, color: Color(0xFF6F8DFF)),
+                    const SizedBox(height: 16),
+                    const Text('Vérification email', textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Color(0xFFEAF0FF))),
+                    const SizedBox(height: 8),
+                    Text('Un code à 6 chiffres a été envoyé à\n${widget.email}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Color(0xFFB8C8ED), height: 1.4)),
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: _code,
+                      keyboardType: TextInputType.number,
+                      maxLength: 6,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: 8),
+                      decoration: const InputDecoration(hintText: '000000', counterText: ''),
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: state.loading
+                          ? null
+                          : () async {
+                              setState(() { _error = null; _message = null; });
+                              try {
+                                await state.verifyOtp(widget.email, _code.text.trim());
+                                if (!mounted) return;
+                                Navigator.of(context).pushAndRemoveUntil(
+                                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                                  (r) => false,
+                                );
+                              } catch (e) {
+                                if (!mounted) return;
+                                setState(() => _error = e.toString());
+                              }
+                            },
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 52),
+                        backgroundColor: const Color(0xFF6F8DFF),
+                        foregroundColor: const Color(0xFF0A1333),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text(state.loading ? 'Vérification...' : 'Confirmer',
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () async {
+                        setState(() { _error = null; _message = null; });
+                        try {
+                          await state.api.resendOtp(widget.email);
+                          setState(() => _message = 'Code renvoyé.');
+                        } catch (e) {
+                          setState(() => _error = e.toString());
+                        }
+                      },
+                      child: const Text('Renvoyer le code'),
+                    ),
+                    if (_message != null) _InfoBox(_message!, isError: false),
+                    if (_error != null) _InfoBox(_error!, isError: true),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Forgot Password ─────────────────────────────────────────────────────────
+
+class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({super.key});
+
+  @override
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+}
+
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+  final _email = TextEditingController();
+  String? _error;
+  String? _message;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    return Scaffold(
+      backgroundColor: const Color(0xFF050B24),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF050B24),
+        foregroundColor: const Color(0xFFEAF0FF),
+        title: const Text('Mot de passe oublié'),
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 430),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A1748),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFF2A4A8D)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Icon(Icons.lock_reset_outlined, size: 52, color: Color(0xFF6F8DFF)),
+                  const SizedBox(height: 16),
+                  const Text('Réinitialiser le mot de passe', textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Color(0xFFEAF0FF))),
+                  const SizedBox(height: 8),
+                  const Text('Entrez votre adresse email et nous vous enverrons un lien de réinitialisation.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Color(0xFFB8C8ED), height: 1.4)),
+                  const SizedBox(height: 24),
+                  const Text('Email', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFEAF0FF))),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _email,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(hintText: 'votre@email.cm'),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: state.loading
+                        ? null
+                        : () async {
+                            setState(() { _error = null; _message = null; });
+                            try {
+                              await state.forgotPassword(_email.text.trim());
+                              if (!mounted) return;
+                              setState(() => _message = 'Email envoyé. Consultez votre boîte mail.');
+                            } catch (e) {
+                              if (!mounted) return;
+                              setState(() => _error = e.toString());
+                            }
+                          },
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 52),
+                      backgroundColor: const Color(0xFF6F8DFF),
+                      foregroundColor: const Color(0xFF0A1333),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text(state.loading ? 'Envoi...' : 'Envoyer le lien',
+                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                  ),
+                  if (_message != null) ...[const SizedBox(height: 8), _InfoBox(_message!, isError: false)],
+                  if (_error != null) ...[const SizedBox(height: 8), _InfoBox(_error!, isError: true)],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Récépissés Page ─────────────────────────────────────────────────────────
+
+class RecepissesPage extends StatelessWidget {
+  const RecepissesPage({super.key});
+
+  Color _statutColor(String s) {
+    switch (s.toUpperCase()) {
+      case 'VALIDE': return const Color(0xFF22C55E);
+      case 'EXPIRE': return const Color(0xFFF59E0B);
+      case 'ANNULE': return const Color(0xFFEF4444);
+      case 'REMPLACE': return const Color(0xFF8B5CF6);
+      default: return const Color(0xFF64748B);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final items = state.recepisses;
+    return AppPageShell(
+      onRefresh: state.refreshUserData,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.receipt_long_outlined, color: Color(0xFF6F8DFF), size: 28),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text('Mes récépissés',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Color(0xFFEAF0FF))),
+            ),
+            IconButton(
+              onPressed: state.refreshUserData,
+              icon: const Icon(Icons.refresh, color: Color(0xFF6F8DFF)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text('${items.length} récépissé(s)', style: const TextStyle(color: Color(0xFFAFC0E8))),
+        const SizedBox(height: 12),
+        if (items.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0A1748),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF2A4A8D)),
+            ),
+            child: const Column(
+              children: [
+                Icon(Icons.inbox_outlined, size: 48, color: Color(0xFF4A6FA8)),
+                SizedBox(height: 12),
+                Text('Aucun récépissé pour l\'instant.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Color(0xFFAFC0E8))),
+              ],
+            ),
+          )
+        else
+          ...items.map((r) => _RecepisseCard(item: r, statutColor: _statutColor(r.statut))),
+      ],
+    );
+  }
+}
+
+class _RecepisseCard extends StatefulWidget {
+  final RecepissItem item;
+  final Color statutColor;
+  const _RecepisseCard({required this.item, required this.statutColor});
+
+  @override
+  State<_RecepisseCard> createState() => _RecepisseCardState();
+}
+
+class _RecepisseCardState extends State<_RecepisseCard> {
+  bool _downloading = false;
+  String? _error;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final r = widget.item;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A1748),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF2A4A8D)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.article_outlined, color: Color(0xFF6F8DFF), size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(r.numero,
+                    style: const TextStyle(color: Color(0xFFEAF0FF), fontWeight: FontWeight.w700, fontSize: 16)),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: widget.statutColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: widget.statutColor.withValues(alpha: 0.4)),
+                ),
+                child: Text(r.statut,
+                    style: TextStyle(color: widget.statutColor, fontSize: 11, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('Émis le : ${r.dateGeneration.split('T').first}',
+              style: const TextStyle(color: Color(0xFFAFC0E8), fontSize: 13)),
+          if (r.dateExpiration != null)
+            Text('Expire le : ${r.dateExpiration!.split('T').first}',
+                style: const TextStyle(color: Color(0xFFAFC0E8), fontSize: 13)),
+          if (_error != null) ...[
+            const SizedBox(height: 6),
+            Text(_error!, style: const TextStyle(color: Color(0xFFFF9DB5), fontSize: 12)),
+          ],
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: _downloading
+                ? null
+                : () async {
+                    setState(() { _downloading = true; _error = null; });
+                    try {
+                      final bytes = await state.api.downloadRecepisse(state.token!, r.id);
+                      final dir = await getTemporaryDirectory();
+                      final file = File('${dir.path}/recepisse-${r.numero}.pdf');
+                      await file.writeAsBytes(bytes);
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Récépissé sauvegardé : ${file.path}')),
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+                      setState(() => _error = e.toString());
+                    } finally {
+                      if (mounted) setState(() => _downloading = false);
+                    }
+                  },
+            icon: _downloading
+                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.download_outlined, size: 16),
+            label: Text(_downloading ? 'Téléchargement...' : 'Télécharger PDF'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF6F8DFF),
+              side: const BorderSide(color: Color(0xFF3A5A9F)),
+              minimumSize: const Size(double.infinity, 42),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Profile Page ────────────────────────────────────────────────────────────
+
+class ProfilePage extends StatefulWidget {
+  const ProfilePage({super.key});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  late TextEditingController _first;
+  late TextEditingController _last;
+  final _oldPwd = TextEditingController();
+  final _newPwd = TextEditingController();
+  final _confirmPwd = TextEditingController();
+
+  String? _profileError;
+  String? _profileSuccess;
+  String? _pwdError;
+  String? _pwdSuccess;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final user = AppScope.of(context).user;
+    _first = TextEditingController(text: user?.firstName ?? '');
+    _last = TextEditingController(text: user?.lastName ?? '');
+  }
+
+  @override
+  void dispose() {
+    _first.dispose();
+    _last.dispose();
+    _oldPwd.dispose();
+    _newPwd.dispose();
+    _confirmPwd.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final u = state.user;
+    return AppPageShell(
+      children: [
+        Row(
+          children: [
+            CircleAvatar(
+              radius: 30,
+              backgroundColor: const Color(0xFF1A2E70),
+              child: Text(
+                ((u?.firstName ?? 'U').isNotEmpty ? (u?.firstName ?? 'U')[0] : 'U').toUpperCase(),
+                style: const TextStyle(color: Color(0xFFBFE8FF), fontWeight: FontWeight.w800, fontSize: 24),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${u?.firstName ?? ''} ${u?.lastName ?? ''}',
+                      style: const TextStyle(color: Color(0xFFEAF0FF), fontSize: 20, fontWeight: FontWeight.w700)),
+                  Text(u?.email ?? '', style: const TextStyle(color: Color(0xFFB4C7EA))),
+                  Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A3A1A),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF2E7D32)),
+                    ),
+                    child: Text(u?.role ?? '', style: const TextStyle(color: Color(0xFF81C784), fontSize: 12, fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        // Modifier le profil
+        _RequestCard(
+          title: 'Modifier le profil',
+          icon: Icons.edit_outlined,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Prénom', style: TextStyle(color: Color(0xFFEAF0FF), fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 4),
+                        TextField(controller: _first, decoration: const InputDecoration(hintText: 'Prénom')),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Nom', style: TextStyle(color: Color(0xFFEAF0FF), fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 4),
+                        TextField(controller: _last, decoration: const InputDecoration(hintText: 'Nom')),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (_profileError != null) ...[const SizedBox(height: 8), _InfoBox(_profileError!, isError: true)],
+              if (_profileSuccess != null) ...[const SizedBox(height: 8), _InfoBox(_profileSuccess!, isError: false)],
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: state.loading
+                    ? null
+                    : () async {
+                        setState(() { _profileError = null; _profileSuccess = null; });
+                        try {
+                          await state.updateProfile(firstName: _first.text.trim(), lastName: _last.text.trim());
+                          if (!mounted) return;
+                          setState(() => _profileSuccess = 'Profil mis à jour.');
+                        } catch (e) {
+                          if (!mounted) return;
+                          setState(() => _profileError = e.toString());
+                        }
+                      },
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                  backgroundColor: const Color(0xFF6F8DFF),
+                  foregroundColor: const Color(0xFF081331),
+                ),
+                child: Text(state.loading ? 'Mise à jour...' : 'Enregistrer'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Changer le mot de passe
+        _RequestCard(
+          title: 'Changer le mot de passe',
+          icon: Icons.lock_outline,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('Mot de passe actuel', style: TextStyle(color: Color(0xFFEAF0FF), fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              TextField(controller: _oldPwd, obscureText: true, decoration: const InputDecoration(hintText: '••••••••')),
+              const SizedBox(height: 10),
+              const Text('Nouveau mot de passe', style: TextStyle(color: Color(0xFFEAF0FF), fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              TextField(controller: _newPwd, obscureText: true, decoration: const InputDecoration(hintText: '••••••••')),
+              const SizedBox(height: 10),
+              const Text('Confirmer', style: TextStyle(color: Color(0xFFEAF0FF), fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              TextField(controller: _confirmPwd, obscureText: true, decoration: const InputDecoration(hintText: '••••••••')),
+              if (_pwdError != null) ...[const SizedBox(height: 8), _InfoBox(_pwdError!, isError: true)],
+              if (_pwdSuccess != null) ...[const SizedBox(height: 8), _InfoBox(_pwdSuccess!, isError: false)],
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: state.loading
+                    ? null
+                    : () async {
+                        setState(() { _pwdError = null; _pwdSuccess = null; });
+                        if (_newPwd.text != _confirmPwd.text) {
+                          setState(() => _pwdError = 'Les mots de passe ne correspondent pas.');
+                          return;
+                        }
+                        if (_newPwd.text.length < 8) {
+                          setState(() => _pwdError = 'Minimum 8 caractères requis.');
+                          return;
+                        }
+                        try {
+                          await state.changePassword(oldPassword: _oldPwd.text, newPassword: _newPwd.text);
+                          if (!mounted) return;
+                          _oldPwd.clear(); _newPwd.clear(); _confirmPwd.clear();
+                          setState(() => _pwdSuccess = 'Mot de passe modifié avec succès.');
+                        } catch (e) {
+                          if (!mounted) return;
+                          setState(() => _pwdError = e.toString());
+                        }
+                      },
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                  backgroundColor: const Color(0xFF6F8DFF),
+                  foregroundColor: const Color(0xFF081331),
+                ),
+                child: Text(state.loading ? 'Mise à jour...' : 'Changer le mot de passe'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Notifications et déconnexion
+        _RequestCard(
+          title: 'Paramètres',
+          icon: Icons.settings_outlined,
+          child: Column(
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.notifications_outlined, color: Color(0xFF6F8DFF)),
+                title: const Text('Notifications', style: TextStyle(color: Color(0xFFEAF0FF))),
+                trailing: Badge(
+                  isLabelVisible: state.unreadCount > 0,
+                  label: Text('${state.unreadCount}'),
+                  child: const Icon(Icons.chevron_right, color: Color(0xFF6F8DFF)),
+                ),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.verified_outlined, color: Color(0xFF6F8DFF)),
+                title: const Text('Valider un token', style: TextStyle(color: Color(0xFFEAF0FF))),
+                trailing: const Icon(Icons.chevron_right, color: Color(0xFF6F8DFF)),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TokenValidationPage())),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.book_outlined, color: Color(0xFF6F8DFF)),
+                title: const Text('Documentation', style: TextStyle(color: Color(0xFFEAF0FF))),
+                trailing: const Icon(Icons.chevron_right, color: Color(0xFF6F8DFF)),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LandingDocsScreen())),
+              ),
+              const Divider(color: Color(0xFF1E3A7F)),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.logout, color: Color(0xFFFF6B6B)),
+                title: const Text('Déconnexion', style: TextStyle(color: Color(0xFFFF9DB5))),
+                onTap: state.logout,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Shared helper widget ─────────────────────────────────────────────────────
+
+class _InfoBox extends StatelessWidget {
+  final String text;
+  final bool isError;
+  const _InfoBox(this.text, {required this.isError});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isError ? const Color(0xFF3A1620) : const Color(0xFF0C2D24),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: isError ? const Color(0xFF8A2E45) : const Color(0xFF2F8E71)),
+      ),
+      child: Text(text,
+          style: TextStyle(color: isError ? const Color(0xFFFF9DB5) : const Color(0xFF6FFFC8))),
     );
   }
 }

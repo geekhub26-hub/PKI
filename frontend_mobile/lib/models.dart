@@ -89,3 +89,30 @@ class AppNotificationItem {
     required this.timestamp,
   });
 }
+
+class RecepissItem {
+  final String id;
+  final String numero;
+  final String statut;
+  final String dateGeneration;
+  final String? dateExpiration;
+  final String? requestId;
+
+  RecepissItem({
+    required this.id,
+    required this.numero,
+    required this.statut,
+    required this.dateGeneration,
+    this.dateExpiration,
+    this.requestId,
+  });
+
+  factory RecepissItem.fromJson(Map<String, dynamic> json) => RecepissItem(
+        id: (json['id'] ?? '').toString(),
+        numero: (json['numero'] ?? '').toString(),
+        statut: (json['statut'] ?? '').toString(),
+        dateGeneration: (json['dateGeneration'] ?? json['createdAt'] ?? '').toString(),
+        dateExpiration: json['dateExpiration']?.toString(),
+        requestId: json['requestId']?.toString(),
+      );
+}
