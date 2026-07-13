@@ -2,36 +2,41 @@ import { useEffect, useState } from 'react';
 import {
   Settings2, Save, RefreshCw, CheckCircle, AlertCircle,
   Hash, Clock, UserPlus, Building2, ShieldCheck, Copy, Eye, EyeOff,
+  Timer, KeyRound, FileCheck2, Bell, Lock, BadgeCheck, RotateCcw,
 } from 'lucide-react';
 import { adminService } from '../services/api';
 import { useToast } from '../components/Toast';
 
-interface Parametre {
-  cle: string;
-  valeur: string;
-  description: string;
-}
+interface Parametre { cle: string; valeur: string; description: string; }
 
-const LABELS: Record<string, { label: string; hint: string; type: 'number' | 'text'; icon: React.ReactNode }> = {
-  delai_expiration_defaut: {
-    label: "Délai d'expiration des récépissés (jours)",
-    hint: "Nombre de jours de validité d'un récépissé après génération (1–365).",
-    type: 'number',
-    icon: <Clock size={16} className="text-blue-500" />,
-  },
-  entite_code: {
-    label: 'Code entité',
-    hint: "Sigle de l'entité inclus dans le numéro : REC-YYYYMMDD-{CODE}-000001.",
-    type: 'text',
-    icon: <Hash size={16} className="text-emerald-500" />,
-  },
+type ParamMeta = { label: string; hint: string; type: 'number' | 'text'; icon: JSX.Element; unit?: string };
+
+const LABELS: Record<string, ParamMeta> = {
+  delai_expiration_defaut:          { label: "Validité des récépissés",                  hint: "Nombre de jours de validité d'un récépissé après génération.",                         type: 'number', icon: <Clock      size={14} className="text-blue-500"    />, unit: 'jours'     },
+  entite_code:                      { label: 'Code entité',                               hint: "Sigle inclus dans le numéro de récépissé : REC-YYYYMMDD-{CODE}-000001.",              type: 'text',   icon: <Hash       size={14} className="text-emerald-500" />                   },
+  session_timeout_minutes:          { label: "Inactivité avant déconnexion auto",         hint: "L'utilisateur est déconnecté après cette durée d'inactivité.",                        type: 'number', icon: <Timer      size={14} className="text-amber-500"   />, unit: 'minutes'   },
+  otp_expiry_minutes:               { label: "Validité du code OTP email",                hint: "Durée avant expiration du code OTP envoyé par email lors de l'inscription.",          type: 'number', icon: <KeyRound   size={14} className="text-violet-500"  />, unit: 'minutes'   },
+  two_fa_expiry_minutes:            { label: "Validité du code 2FA SMS",                  hint: "Durée avant expiration du code de double authentification par SMS.",                  type: 'number', icon: <ShieldCheck size={14} className="text-indigo-500" />, unit: 'minutes'   },
+  max_login_attempts:               { label: "Tentatives de connexion max",               hint: "Nombre de tentatives échouées avant blocage temporaire du compte.",                   type: 'number', icon: <Lock       size={14} className="text-red-500"     />, unit: 'tentatives'},
+  certificat_validite_defaut_jours: { label: "Validité par défaut des certificats",       hint: "Durée appliquée lors de la signature d'un certificat si non spécifiée.",              type: 'number', icon: <FileCheck2 size={14} className="text-emerald-600" />, unit: 'jours'     },
+  rappel_expiration_jours:          { label: "Rappel avant expiration certificat",         hint: "Nombre de jours avant expiration où un email/SMS de rappel est envoyé.",             type: 'number', icon: <Bell       size={14} className="text-orange-500"  />, unit: 'jours'     },
+  validation_token_expiry_hours:    { label: "Validité du token de validation certificat", hint: "Durée avant expiration du lien de validation envoyé à l'utilisateur.",               type: 'number', icon: <BadgeCheck size={14} className="text-teal-500"    />, unit: 'heures'    },
+  password_reset_expiry_hours:      { label: "Validité du lien de réinitialisation",       hint: "Durée avant expiration du lien de réinitialisation de mot de passe.",                type: 'number', icon: <RotateCcw  size={14} className="text-slate-500"   />, unit: 'heures'    },
 };
 
+const GROUPS = [
+  { title: 'Récépissés',               keys: ['delai_expiration_defaut', 'entite_code'] },
+  { title: 'Session & Authentification', keys: ['session_timeout_minutes', 'otp_expiry_minutes', 'two_fa_expiry_minutes', 'max_login_attempts'] },
+  { title: 'Certificats',               keys: ['certificat_validite_defaut_jours', 'rappel_expiration_jours', 'validation_token_expiry_hours', 'password_reset_expiry_hours'] },
+];
+
+const ALL_KNOWN_KEYS = GROUPS.flatMap((g) => g.keys);
+
 const ROLE_OPTIONS = [
-  { value: 'ADMIN',       label: 'Admin global',    desc: 'Accès complet, toutes entités' },
-  { value: 'AE_CENTRALE', label: 'AE Centrale',     desc: 'Gestion d\'une AE Centrale' },
-  { value: 'ADMIN_AEL',   label: 'Admin AEL',       desc: 'Administration d\'une AEL' },
-  { value: 'AEL',         label: 'Opérateur AEL',   desc: 'Traitement des demandes AEL' },
+  { value: 'ADMIN',       label: 'Admin global',   desc: 'Accès complet, toutes entités' },
+  { value: 'AE_CENTRALE', label: 'AE Centrale',    desc: "Gestion d'une AE Centrale" },
+  { value: 'ADMIN_AEL',   label: 'Admin AEL',      desc: "Administration d'une AEL" },
+  { value: 'AEL',         label: 'Opérateur AEL',  desc: 'Traitement des demandes AEL' },
 ];
 
 export default function SuperAdminSettingsPage() {
@@ -39,12 +44,12 @@ export default function SuperAdminSettingsPage() {
 
   // Paramètres
   const [parametres, setParametres] = useState<Parametre[]>([]);
-  const [loadingParams, setLoadingParams] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<Record<string, { ok: boolean; msg: string }>>({});
 
-  // Entités & formulaire admin
+  // Admin creation
   const [entites, setEntites] = useState<any[]>([]);
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', telephone: '', role: 'ADMIN', entiteId: '' });
   const [busyAdmin, setBusyAdmin] = useState(false);
@@ -55,7 +60,7 @@ export default function SuperAdminSettingsPage() {
   useEffect(() => { loadAll(); }, []);
 
   const loadAll = async () => {
-    setLoadingParams(true);
+    setLoading(true);
     try {
       const [params, ents] = await Promise.all([
         adminService.getParametres(),
@@ -71,7 +76,7 @@ export default function SuperAdminSettingsPage() {
       addToast({ type: 'error', message: e?.message || 'Erreur de chargement' });
       setParametres([]);
     } finally {
-      setLoadingParams(false);
+      setLoading(false);
     }
   };
 
@@ -101,7 +106,7 @@ export default function SuperAdminSettingsPage() {
     setCreatedAdmin(null);
     if (!form.firstName.trim()) { setAdminError('Le prénom est requis.'); return; }
     if (!form.lastName.trim())  { setAdminError('Le nom est requis.'); return; }
-    if (!form.email.trim())     { setAdminError('L\'email est requis.'); return; }
+    if (!form.email.trim())     { setAdminError("L'email est requis."); return; }
     if (form.role !== 'ADMIN' && !form.entiteId) { setAdminError('Sélectionnez une entité pour ce rôle.'); return; }
     setBusyAdmin(true);
     try {
@@ -124,19 +129,56 @@ export default function SuperAdminSettingsPage() {
   };
 
   const copyPassword = () => {
-    if (createdAdmin) {
-      navigator.clipboard.writeText(createdAdmin.tempPassword);
-      addToast({ type: 'success', message: 'Mot de passe copié !' });
-    }
+    if (!createdAdmin) return;
+    navigator.clipboard.writeText(createdAdmin.tempPassword);
+    addToast({ type: 'success', message: 'Mot de passe copié !' });
   };
 
-  if (loadingParams) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="h-7 w-7 animate-spin rounded-full border-2 border-slate-200 border-t-blue-500" />
       </div>
     );
   }
+
+  const ParamRow = ({ p }: { p: Parametre }) => {
+    const meta = LABELS[p.cle];
+    const fb   = feedback[p.cle];
+    return (
+      <div className="flex items-center gap-4 px-5 py-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+            {meta?.icon ?? <Settings2 size={14} />}
+            {meta?.label ?? p.cle}
+          </div>
+          <p className="mt-0.5 text-xs text-slate-400">{meta?.hint ?? p.description}</p>
+          {fb && (
+            <div className={`mt-1 flex items-center gap-1 text-xs font-semibold ${fb.ok ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {fb.ok ? <CheckCircle size={11} /> : <AlertCircle size={11} />} {fb.msg}
+            </div>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <input
+              type={meta?.type ?? 'text'}
+              min={meta?.type === 'number' ? 1 : undefined}
+              value={values[p.cle] ?? ''}
+              onChange={(ev) => setValues((v) => ({ ...v, [p.cle]: ev.target.value }))}
+              className="pki-input text-center"
+              style={{ width: meta?.type === 'number' ? '80px' : '130px' }}
+            />
+            {meta?.unit && <span className="text-xs text-slate-400 whitespace-nowrap">{meta.unit}</span>}
+          </div>
+          <button onClick={() => save(p.cle)} disabled={saving === p.cle} className="btn btn-green" style={{ padding: '6px 14px', fontSize: '12px' }}>
+            {saving === p.cle ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />}
+            Sauver
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="mx-auto max-w-2xl space-y-8 py-6">
@@ -150,13 +192,13 @@ export default function SuperAdminSettingsPage() {
           <div>
             <p className="mb-1 text-xs font-bold uppercase tracking-widest text-white/50">Super Administration</p>
             <h1 className="text-2xl font-bold text-white">Configuration globale</h1>
-            <p className="mt-0.5 text-sm text-white/60">Paramètres de la plateforme ANTIC PKI.</p>
+            <p className="mt-0.5 text-sm text-white/60">Paramètres appliqués à l'ensemble de la plateforme ANTIC PKI.</p>
           </div>
         </div>
       </div>
 
       {/* ── Paramètres système ── */}
-      <section className="space-y-4">
+      <section className="space-y-5">
         <div className="section-title">
           <div className="flex items-center gap-2">
             <Settings2 size={15} className="text-slate-500" />
@@ -166,45 +208,34 @@ export default function SuperAdminSettingsPage() {
 
         {parametres.length === 0 ? (
           <div className="pki-card p-8 text-center text-sm text-slate-400">Aucun paramètre disponible.</div>
-        ) : parametres.map((p) => {
-          const meta = LABELS[p.cle];
-          const fb   = feedback[p.cle];
-          return (
-            <div key={p.cle} className="pki-card p-5">
-              <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-                {meta?.icon ?? <Settings2 size={14} />}
-                {meta?.label ?? p.cle}
-              </div>
-              {(meta?.hint || p.description) && (
-                <p className="mb-3 text-xs text-slate-400">{meta?.hint ?? p.description}</p>
-              )}
-              <div className="flex items-center gap-3">
-                <input
-                  type={meta?.type ?? 'text'}
-                  min={meta?.type === 'number' ? 1 : undefined}
-                  max={meta?.type === 'number' ? 365 : undefined}
-                  value={values[p.cle] ?? ''}
-                  onChange={(e) => setValues((v) => ({ ...v, [p.cle]: e.target.value }))}
-                  className="pki-input"
-                  style={{ maxWidth: '200px' }}
-                />
-                <button
-                  onClick={() => save(p.cle)}
-                  disabled={saving === p.cle}
-                  className="btn btn-green"
-                >
-                  {saving === p.cle ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
-                  Enregistrer
-                </button>
-              </div>
-              {fb && (
-                <div className={`mt-2 flex items-center gap-1.5 text-xs font-semibold ${fb.ok ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  {fb.ok ? <CheckCircle size={12} /> : <AlertCircle size={12} />} {fb.msg}
+        ) : (
+          <>
+            {GROUPS.map((group) => {
+              const rows = parametres.filter((p) => group.keys.includes(p.cle));
+              if (rows.length === 0) return null;
+              return (
+                <div key={group.title}>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    {group.title}
+                  </p>
+                  <div className="pki-card overflow-hidden divide-y divide-slate-100 dark:divide-slate-700/60">
+                    {rows.map((p) => <ParamRow key={p.cle} p={p} />)}
+                  </div>
                 </div>
-              )}
-            </div>
-          );
-        })}
+              );
+            })}
+
+            {/* Paramètres non catégorisés */}
+            {parametres.filter((p) => !ALL_KNOWN_KEYS.includes(p.cle)).length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Autres</p>
+                <div className="pki-card overflow-hidden divide-y divide-slate-100 dark:divide-slate-700/60">
+                  {parametres.filter((p) => !ALL_KNOWN_KEYS.includes(p.cle)).map((p) => <ParamRow key={p.cle} p={p} />)}
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       {/* ── Créer un administrateur ── */}
@@ -216,9 +247,9 @@ export default function SuperAdminSettingsPage() {
           </div>
         </div>
 
-        {/* Résultat de création — mot de passe en clair affiché une seule fois */}
+        {/* Mot de passe affiché après création */}
         {createdAdmin && (
-          <div className="pki-card mb-4 overflow-hidden border-emerald-200 dark:border-emerald-700/50">
+          <div className="pki-card mb-4 overflow-hidden">
             <div className="flex items-center gap-3 bg-emerald-50 px-5 py-3 dark:bg-emerald-950/30">
               <CheckCircle size={18} className="text-emerald-600 dark:text-emerald-400" />
               <div>
@@ -239,7 +270,7 @@ export default function SuperAdminSettingsPage() {
                     {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                   </button>
                 </div>
-                <button onClick={copyPassword} className="btn btn-primary" title="Copier">
+                <button onClick={copyPassword} className="btn btn-primary">
                   <Copy size={14} /> Copier
                 </button>
               </div>
@@ -251,7 +282,6 @@ export default function SuperAdminSettingsPage() {
         )}
 
         <div className="pki-card overflow-hidden">
-          {/* Notice */}
           <div className="flex items-start gap-3 border-b border-slate-100 bg-violet-50 px-5 py-4 dark:border-slate-700/60 dark:bg-violet-950/20">
             <ShieldCheck size={16} className="mt-0.5 shrink-0 text-violet-500" />
             <p className="text-sm text-violet-700 dark:text-violet-300">
@@ -261,7 +291,6 @@ export default function SuperAdminSettingsPage() {
           </div>
 
           <form onSubmit={handleCreateAdmin} className="space-y-5 p-5">
-            {/* Nom & Prénom */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -277,7 +306,6 @@ export default function SuperAdminSettingsPage() {
               </div>
             </div>
 
-            {/* Email */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
                 Email <span className="text-red-500">*</span>
@@ -285,7 +313,6 @@ export default function SuperAdminSettingsPage() {
               <input type="email" placeholder="admin@exemple.cm" value={form.email} onChange={setField('email')} className="pki-input" required />
             </div>
 
-            {/* Téléphone */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
                 Téléphone <span className="text-xs font-normal text-slate-400">(optionnel)</span>
@@ -293,26 +320,20 @@ export default function SuperAdminSettingsPage() {
               <input type="tel" placeholder="+237 6XX XXX XXX" value={form.telephone} onChange={setField('telephone')} className="pki-input" />
             </div>
 
-            {/* Rôle */}
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
                 Rôle <span className="text-red-500">*</span>
               </label>
               <div className="grid grid-cols-2 gap-2">
                 {ROLE_OPTIONS.map((r) => (
-                  <label
-                    key={r.value}
-                    className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${
-                      form.role === r.value
-                        ? 'border-emerald-500 bg-emerald-50 dark:border-emerald-500/60 dark:bg-emerald-950/30'
-                        : 'border-slate-200 hover:border-slate-300 dark:border-slate-600'
-                    }`}
-                  >
+                  <label key={r.value} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${
+                    form.role === r.value
+                      ? 'border-emerald-500 bg-emerald-50 dark:border-emerald-500/60 dark:bg-emerald-950/30'
+                      : 'border-slate-200 hover:border-slate-300 dark:border-slate-600'
+                  }`}>
                     <input type="radio" name="role" value={r.value} checked={form.role === r.value} onChange={setField('role')} className="mt-0.5 accent-emerald-600" />
                     <div>
-                      <p className={`text-sm font-semibold ${form.role === r.value ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-700 dark:text-slate-200'}`}>
-                        {r.label}
-                      </p>
+                      <p className={`text-sm font-semibold ${form.role === r.value ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-700 dark:text-slate-200'}`}>{r.label}</p>
                       <p className="text-xs text-slate-400">{r.desc}</p>
                     </div>
                   </label>
@@ -320,7 +341,6 @@ export default function SuperAdminSettingsPage() {
               </div>
             </div>
 
-            {/* Entité */}
             {form.role !== 'ADMIN' && (
               <div>
                 <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -334,13 +354,12 @@ export default function SuperAdminSettingsPage() {
                 </select>
                 {entites.filter((e) => e.isActive).length === 0 && (
                   <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                    Aucune entité active — créez-en une dans la page "Gérer les entités".
+                    Aucune entité active — créez-en une dans "Gérer les entités".
                   </p>
                 )}
               </div>
             )}
 
-            {/* Erreur */}
             {adminError && (
               <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800/40 dark:bg-red-950/30 dark:text-red-300">
                 <AlertCircle size={14} className="shrink-0" /> {adminError}
