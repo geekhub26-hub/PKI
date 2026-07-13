@@ -204,7 +204,8 @@ public class EntiteController {
         resp.put("email", newAdmin.getEmail());
         resp.put("role", userRole.name());
         resp.put("entite", entite != null ? toMap(entite) : null);
-        resp.put("message", "Compte créé et mot de passe temporaire envoyé par email");
+        resp.put("tempPassword", tempPassword); // affiché une fois côté frontend, jamais stocké en clair
+        resp.put("message", "Compte créé avec succès");
         return ResponseEntity.ok(resp);
     }
 
