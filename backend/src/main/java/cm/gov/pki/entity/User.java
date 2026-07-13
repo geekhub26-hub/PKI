@@ -122,6 +122,18 @@ public class User {
 	@Column(name = "refresh_token_hash", length = 64)
 	private String refreshTokenHash;
 
+	@Column(name = "failed_login_attempts", nullable = false)
+	private int failedLoginAttempts = 0;
+
+	@Column(name = "account_locked_until")
+	private LocalDateTime accountLockedUntil;
+
+	public int getFailedLoginAttempts() { return failedLoginAttempts; }
+	public void setFailedLoginAttempts(int n) { this.failedLoginAttempts = n; }
+
+	public LocalDateTime getAccountLockedUntil() { return accountLockedUntil; }
+	public void setAccountLockedUntil(LocalDateTime t) { this.accountLockedUntil = t; }
+
 	public String getAvatarUrl() { return avatarUrl; }
 	public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
 

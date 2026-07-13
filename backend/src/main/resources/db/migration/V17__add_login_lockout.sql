@@ -1,0 +1,4 @@
+-- Blocage de compte après N tentatives de connexion échouées
+ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS failed_login_attempts INT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS account_locked_until  TIMESTAMP NULL;

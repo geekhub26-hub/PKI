@@ -2,6 +2,7 @@ package cm.gov.pki.service;
 
 import cm.gov.pki.dto.AuthDTO;
 import cm.gov.pki.entity.User;
+import cm.gov.pki.repository.ParametreRepository;
 import cm.gov.pki.repository.UserRepository;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
@@ -32,17 +33,23 @@ public class AuthService {
     private final AuditService auditService;
     private final EmailService emailService;
     private final SmsService smsService;
+    private final ParametreRepository parametreRepository;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder(12);
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
+    // Durée de blocage après dépassement du quota d'échecs (minutes)
+    private static final int LOCKOUT_DURATION_MINUTES = 30;
+
     @Autowired
     public AuthService(UserRepository userRepository, AuditService auditService,
-                       EmailService emailService, SmsService smsService) {
+                       EmailService emailService, SmsService smsService,
+                       ParametreRepository parametreRepository) {
         this.userRepository = userRepository;
         this.auditService = auditService;
         this.emailService = emailService;
         this.smsService = smsService;
+        this.parametreRepository = parametreRepository;
     }
 
     // Durée d'inactivité avant expiration de session (en minutes, configurable)
@@ -155,15 +162,38 @@ public class AuthService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("Email ou mot de passe invalide"));
 
+        // Vérification du blocage de compte
+        if (user.getAccountLockedUntil() != null && user.getAccountLockedUntil().isAfter(LocalDateTime.now())) {
+            long minutesLeft = java.time.Duration.between(LocalDateTime.now(), user.getAccountLockedUntil()).toMinutes() + 1;
+            throw new RuntimeException("Compte temporairement bloqué. Réessayez dans " + minutesLeft + " minute(s).");
+        }
+
         boolean passwordMatches;
         try {
             passwordMatches = passwordEncoder.matches(request.getPassword(), user.getPasswordHash());
         } catch (IllegalArgumentException ex) {
-            throw new RuntimeException("Email ou mot de passe invalide");
+            passwordMatches = false;
         }
 
         if (!passwordMatches) {
+            int maxAttempts = readIntParam("max_login_attempts", 5);
+            int attempts = user.getFailedLoginAttempts() + 1;
+            user.setFailedLoginAttempts(attempts);
+            if (attempts >= maxAttempts) {
+                user.setAccountLockedUntil(LocalDateTime.now().plusMinutes(LOCKOUT_DURATION_MINUTES));
+                user.setFailedLoginAttempts(0);
+                userRepository.save(user);
+                throw new RuntimeException("Trop de tentatives échouées. Compte bloqué pour " + LOCKOUT_DURATION_MINUTES + " minutes.");
+            }
+            userRepository.save(user);
             throw new RuntimeException("Email ou mot de passe invalide");
+        }
+
+        // Réinitialisation du compteur d'échecs sur succès
+        if (user.getFailedLoginAttempts() > 0 || user.getAccountLockedUntil() != null) {
+            user.setFailedLoginAttempts(0);
+            user.setAccountLockedUntil(null);
+            userRepository.save(user);
         }
 
         if (!user.canLogin()) {
@@ -483,13 +513,28 @@ public class AuthService {
     }
 
     /**
-     * Vérifie si la session est encore active (inactivité < sessionTimeoutMinutes).
-     * Retourne false si le compte est considéré expiré par inactivité.
+     * Lit un paramètre entier depuis la table parametres, avec fallback sur defaultValue.
+     */
+    private int readIntParam(String cle, int defaultValue) {
+        try {
+            return parametreRepository.findById(cle)
+                    .map(p -> Integer.parseInt(p.getValeur().trim()))
+                    .orElse(defaultValue);
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    /**
+     * Vérifie si la session est encore active (inactivité < session_timeout_minutes).
+     * La valeur est lue depuis la table parametres (clé session_timeout_minutes),
+     * avec fallback sur la propriété pki.session.timeout-minutes.
      */
     public boolean isSessionActive(User user) {
         LocalDateTime lastActivity = user.getLastActivityAt();
-        if (lastActivity == null) return true; // première requête après login
-        return lastActivity.isAfter(LocalDateTime.now().minusMinutes(sessionTimeoutMinutes));
+        if (lastActivity == null) return true;
+        int timeout = readIntParam("session_timeout_minutes", sessionTimeoutMinutes);
+        return lastActivity.isAfter(LocalDateTime.now().minusMinutes(timeout));
     }
 
     /** Met à jour lastActivityAt (best-effort, ne lève pas d'exception). */
