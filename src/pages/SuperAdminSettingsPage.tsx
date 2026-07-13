@@ -1,17 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Settings2, Save, RefreshCw, CheckCircle, AlertCircle, Hash, Clock } from 'lucide-react';
-
-const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:8080/api';
+import { Settings2, Save, RefreshCw, CheckCircle, AlertCircle, Hash, Clock, UserPlus, Building2 } from 'lucide-react';
+import { adminService } from '../services/api';
+import { useToast } from '../components/Toast';
+import Modal from '../components/Modal';
+import Button from '../components/Button';
 
 interface Parametre {
   cle: string;
   valeur: string;
   description: string;
-}
-
-function authHeader() {
-  const token = localStorage.getItem('accessToken');
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 }
 
 const LABELS: Record<string, { label: string; hint: string; type: 'number' | 'text'; icon: React.ReactNode }> = {
@@ -29,47 +26,84 @@ const LABELS: Record<string, { label: string; hint: string; type: 'number' | 'te
   },
 };
 
-export default function SuperAdminSettingsPage() {
-  const [parametres, setParametres] = useState<Parametre[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [saving, setSaving]         = useState<string | null>(null);
-  const [values, setValues]         = useState<Record<string, string>>({});
-  const [feedback, setFeedback]     = useState<Record<string, { ok: boolean; msg: string }>>({});
+const ADMIN_ROLES = ['ADMIN', 'AE_CENTRALE', 'ADMIN_AEL', 'AEL'];
 
-  useEffect(() => {
-    fetch(`${API_BASE}/superadmin/parametres`, { headers: authHeader() })
-      .then((r) => r.json())
-      .then((data: Parametre[]) => {
-        setParametres(data);
-        const init: Record<string, string> = {};
-        data.forEach((p) => { init[p.cle] = p.valeur; });
-        setValues(init);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+export default function SuperAdminSettingsPage() {
+  const { addToast } = useToast();
+
+  const [parametres, setParametres] = useState<Parametre[]>([]);
+  const [loadingParams, setLoadingParams] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [feedback, setFeedback] = useState<Record<string, { ok: boolean; msg: string }>>({});
+
+  const [entites, setEntites] = useState<any[]>([]);
+
+  const [showCreateAdmin, setShowCreateAdmin] = useState(false);
+  const [adminForm, setAdminForm] = useState({
+    email: '', firstName: '', lastName: '', role: 'ADMIN', entiteId: '', telephone: '',
+  });
+  const [busyAdmin, setBusyAdmin] = useState(false);
+
+  useEffect(() => { loadAll(); }, []);
+
+  const loadAll = async () => {
+    setLoadingParams(true);
+    try {
+      const [params, ents] = await Promise.all([
+        adminService.getParametres(),
+        adminService.listEntites().catch(() => [] as any[]),
+      ]);
+      const safeParams = Array.isArray(params) ? params : [];
+      setParametres(safeParams);
+      const init: Record<string, string> = {};
+      safeParams.forEach((p: Parametre) => { init[p.cle] = p.valeur; });
+      setValues(init);
+      setEntites(Array.isArray(ents) ? ents : []);
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message || 'Erreur de chargement des paramètres' });
+      setParametres([]);
+    } finally {
+      setLoadingParams(false);
+    }
+  };
 
   const save = async (cle: string) => {
     setSaving(cle);
     setFeedback((f) => ({ ...f, [cle]: undefined as any }));
     try {
-      const res = await fetch(`${API_BASE}/superadmin/parametres/${cle}`, {
-        method: 'PUT',
-        headers: authHeader(),
-        body: JSON.stringify({ valeur: values[cle] }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setFeedback((f) => ({ ...f, [cle]: { ok: false, msg: data.error || 'Erreur.' } }));
-      } else {
-        setFeedback((f) => ({ ...f, [cle]: { ok: true, msg: 'Paramètre sauvegardé.' } }));
-        setTimeout(() => setFeedback((f) => ({ ...f, [cle]: undefined as any })), 3000);
-      }
-    } catch {
-      setFeedback((f) => ({ ...f, [cle]: { ok: false, msg: 'Erreur réseau.' } }));
-    } finally { setSaving(null); }
+      await adminService.updateParametre(cle, values[cle]);
+      setFeedback((f) => ({ ...f, [cle]: { ok: true, msg: 'Paramètre sauvegardé.' } }));
+      setTimeout(() => setFeedback((f) => ({ ...f, [cle]: undefined as any })), 3000);
+    } catch (e: any) {
+      setFeedback((f) => ({ ...f, [cle]: { ok: false, msg: e?.message || 'Erreur.' } }));
+    } finally {
+      setSaving(null);
+    }
   };
 
-  if (loading) {
+  const handleCreateAdmin = async () => {
+    setBusyAdmin(true);
+    try {
+      const result = await adminService.createAdminUser({
+        email: adminForm.email,
+        firstName: adminForm.firstName,
+        lastName: adminForm.lastName,
+        role: adminForm.role,
+        entiteId: adminForm.entiteId || undefined,
+        telephone: adminForm.telephone || undefined,
+      });
+      addToast({ type: 'success', message: result?.message || 'Administrateur créé avec succès' });
+      setShowCreateAdmin(false);
+      setAdminForm({ email: '', firstName: '', lastName: '', role: 'ADMIN', entiteId: '', telephone: '' });
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.message || 'Erreur lors de la création' });
+    } finally {
+      setBusyAdmin(false);
+    }
+  };
+
+  if (loadingParams) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="h-7 w-7 animate-spin rounded-full border-2 border-slate-200 border-t-blue-500" />
@@ -103,7 +137,7 @@ export default function SuperAdminSettingsPage() {
         </p>
       </div>
 
-      {/* Param cards */}
+      {/* ── Paramètres système ── */}
       {parametres.length === 0 ? (
         <div className="pki-card p-10 text-center">
           <Settings2 size={32} className="mx-auto mb-3 text-slate-300 dark:text-slate-600" />
@@ -122,13 +156,11 @@ export default function SuperAdminSettingsPage() {
                     <span>{meta?.label ?? p.cle}</span>
                   </div>
                 </div>
-
                 {(meta?.hint || p.description) && (
                   <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
                     {meta?.hint ?? p.description}
                   </p>
                 )}
-
                 <div className="flex items-center gap-3">
                   <input
                     type={meta?.type ?? 'text'}
@@ -150,14 +182,11 @@ export default function SuperAdminSettingsPage() {
                     Enregistrer
                   </button>
                 </div>
-
                 {fb && (
                   <div className={`mt-3 flex items-center gap-1.5 text-xs font-semibold ${
                     fb.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
                   }`}>
-                    {fb.ok
-                      ? <CheckCircle size={13} />
-                      : <AlertCircle size={13} />}
+                    {fb.ok ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
                     {fb.msg}
                   </div>
                 )}
@@ -166,6 +195,112 @@ export default function SuperAdminSettingsPage() {
           })}
         </div>
       )}
+
+      {/* ── Création d'administrateur ── */}
+      <div className="pki-card p-6">
+        <div className="section-title mb-4">
+          <div className="flex items-center gap-2">
+            <UserPlus size={15} className="text-violet-500" />
+            <span>Créer un administrateur</span>
+          </div>
+        </div>
+        <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+          Créez un compte administrateur avec un rôle et une entité assignés.
+          Un mot de passe temporaire sera généré et envoyé par email.
+        </p>
+        <Button onClick={() => setShowCreateAdmin(true)}>
+          <UserPlus size={15} className="mr-1.5" />
+          Créer un administrateur
+        </Button>
+      </div>
+
+      {/* Modal création admin */}
+      <Modal
+        open={showCreateAdmin}
+        title="Créer un administrateur"
+        onClose={() => setShowCreateAdmin(false)}
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setShowCreateAdmin(false)}>Annuler</Button>
+            <Button onClick={handleCreateAdmin} disabled={busyAdmin}>
+              {busyAdmin ? 'Création...' : 'Créer'}
+            </Button>
+          </>
+        )}
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Prénom *</label>
+              <input
+                className="input-field"
+                value={adminForm.firstName}
+                onChange={(e) => setAdminForm((f) => ({ ...f, firstName: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Nom *</label>
+              <input
+                className="input-field"
+                value={adminForm.lastName}
+                onChange={(e) => setAdminForm((f) => ({ ...f, lastName: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Email *</label>
+            <input
+              type="email"
+              className="input-field"
+              value={adminForm.email}
+              onChange={(e) => setAdminForm((f) => ({ ...f, email: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Téléphone</label>
+            <input
+              type="tel"
+              className="input-field"
+              placeholder="+237 6XX XXX XXX"
+              value={adminForm.telephone}
+              onChange={(e) => setAdminForm((f) => ({ ...f, telephone: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Rôle *</label>
+            <select
+              className="input-field"
+              value={adminForm.role}
+              onChange={(e) => setAdminForm((f) => ({ ...f, role: e.target.value }))}
+            >
+              {ADMIN_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          {adminForm.role !== 'ADMIN' && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                Entité <span className="text-red-500">*</span>
+              </label>
+              <select
+                className="input-field"
+                value={adminForm.entiteId}
+                onChange={(e) => setAdminForm((f) => ({ ...f, entiteId: e.target.value }))}
+              >
+                <option value="">— Sélectionner une entité —</option>
+                {entites.filter((e) => e.isActive).map((e: any) => (
+                  <option key={e.id} value={e.id}>{e.nom} ({e.code})</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800/40 dark:bg-blue-950/20">
+            <Building2 size={14} className="mt-0.5 shrink-0 text-blue-500" />
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              Un mot de passe temporaire sera généré automatiquement et envoyé par email à l'administrateur.
+            </p>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -631,6 +631,16 @@ export const adminService = {
     const r = await apiClient.post('/admin/users/create-admin', body);
     return r.data;
   },
+
+  // Paramètres superadmin
+  getParametres: async (): Promise<any[]> => {
+    const r = await apiClient.get<any[]>('/superadmin/parametres');
+    return Array.isArray(r.data) ? r.data : [];
+  },
+  updateParametre: async (cle: string, valeur: string): Promise<any> => {
+    const r = await apiClient.put(`/superadmin/parametres/${cle}`, { valeur });
+    return r.data;
+  },
 };
 
 
