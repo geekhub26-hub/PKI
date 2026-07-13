@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/superadmin")
+@RequestMapping("/superadmin")
 public class SuperAdminController {
 
     private final ParametreRepository parametreRepository;
