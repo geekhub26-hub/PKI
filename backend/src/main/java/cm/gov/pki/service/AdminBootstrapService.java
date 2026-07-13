@@ -51,21 +51,23 @@ public class AdminBootstrapService implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
+        bootstrapAdmin();
+        bootstrapSuperAdmin();
+    }
+
+    private void bootstrapAdmin() {
         if (adminEmail == null || adminEmail.isBlank() || adminPassword == null || adminPassword.isBlank()) {
-            log.info("Admin bootstrap disabled. Set PKI_BOOTSTRAP_ADMIN_EMAIL and PKI_BOOTSTRAP_ADMIN_PASSWORD to create the first admin.");
+            log.info("Admin bootstrap skipped: PKI_BOOTSTRAP_ADMIN_EMAIL / PASSWORD not set.");
             return;
         }
-
         String email = adminEmail.trim().toLowerCase();
         if (userRepository.existsByEmail(email)) {
-            log.info("Admin bootstrap skipped: account {} already exists", email);
+            log.info("Admin bootstrap skipped: {} already exists", email);
             return;
         }
-
-        if (adminPassword.length() < 12) {
-            throw new IllegalStateException("PKI_BOOTSTRAP_ADMIN_PASSWORD must contain at least 12 characters");
+        if (adminPassword.length() < 8) {
+            throw new IllegalStateException("PKI_BOOTSTRAP_ADMIN_PASSWORD must be at least 8 characters");
         }
-
         User admin = User.builder()
                 .email(email)
                 .passwordHash(passwordEncoder.encode(adminPassword))
@@ -75,31 +77,35 @@ public class AdminBootstrapService implements ApplicationRunner {
                 .isActive(true)
                 .emailVerified(true)
                 .build();
-
         userRepository.save(admin);
-        log.info("Bootstrap admin account created: {}", email);
+        log.info("Bootstrap admin created: {}", email);
+    }
 
-        // SuperAdmin bootstrap
-        if (superAdminEmail != null && !superAdminEmail.isBlank()
-                && superAdminPassword != null && !superAdminPassword.isBlank()) {
-            String saEmail = superAdminEmail.trim().toLowerCase();
-            if (!userRepository.existsByEmail(saEmail)) {
-                if (superAdminPassword.length() < 12) {
-                    throw new IllegalStateException("PKI_BOOTSTRAP_SUPERADMIN_PASSWORD must be at least 12 characters");
-                }
-                User sa = User.builder()
-                        .email(saEmail)
-                        .passwordHash(passwordEncoder.encode(superAdminPassword))
-                        .firstName(blankToDefault(superAdminFirstName, "SuperAdmin"))
-                        .lastName(blankToDefault(superAdminLastName, "ANTIC"))
-                        .role(User.UserRole.SUPER_ADMIN)
-                        .isActive(true)
-                        .emailVerified(true)
-                        .build();
-                userRepository.save(sa);
-                log.info("Bootstrap super-admin account created: {}", saEmail);
-            }
+    private void bootstrapSuperAdmin() {
+        if (superAdminEmail == null || superAdminEmail.isBlank()
+                || superAdminPassword == null || superAdminPassword.isBlank()) {
+            log.info("SuperAdmin bootstrap skipped: PKI_BOOTSTRAP_SUPERADMIN_EMAIL / PASSWORD not set.");
+            return;
         }
+        String saEmail = superAdminEmail.trim().toLowerCase();
+        if (userRepository.existsByEmail(saEmail)) {
+            log.info("SuperAdmin bootstrap skipped: {} already exists", saEmail);
+            return;
+        }
+        if (superAdminPassword.length() < 8) {
+            throw new IllegalStateException("PKI_BOOTSTRAP_SUPERADMIN_PASSWORD must be at least 8 characters");
+        }
+        User sa = User.builder()
+                .email(saEmail)
+                .passwordHash(passwordEncoder.encode(superAdminPassword))
+                .firstName(blankToDefault(superAdminFirstName, "SuperAdmin"))
+                .lastName(blankToDefault(superAdminLastName, "ANTIC"))
+                .role(User.UserRole.SUPER_ADMIN)
+                .isActive(true)
+                .emailVerified(true)
+                .build();
+        userRepository.save(sa);
+        log.info("Bootstrap super-admin created: {}", saEmail);
     }
 
     private static String blankToDefault(String value, String fallback) {
