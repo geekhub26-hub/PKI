@@ -65,6 +65,19 @@ public class AuthController {
 		}
 	}
 
+	@PostMapping("/refresh")
+	public ResponseEntity<?> refresh(@RequestBody Map<String, String> body) {
+		String refreshToken = body.get("refreshToken");
+		if (refreshToken == null || refreshToken.isBlank()) {
+			return ResponseEntity.badRequest().body(Map.of("error", "refreshToken requis"));
+		}
+		try {
+			return ResponseEntity.ok(authService.refreshAccessToken(refreshToken));
+		} catch (RuntimeException e) {
+			return ResponseEntity.status(401).body(Map.of("error", e.getMessage()));
+		}
+	}
+
 	@PostMapping("/forgot-password")
 	public ResponseEntity<?> forgotPassword(@RequestBody Map<String, String> request) {
 		String email = request.get("email");

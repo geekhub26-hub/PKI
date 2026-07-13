@@ -250,6 +250,10 @@ public class UserController {
         req.setSubmittedAt(LocalDateTime.now());
         req = certificateRequestRepository.save(req);
 
+        // statut_kyc : EN_COURS dès la soumission
+        user.setStatutKyc("EN_COURS");
+        userRepository.save(user);
+
         String savedDocs;
         try {
             savedDocs = joinNonBlank(
@@ -376,6 +380,11 @@ public class UserController {
         req.setReviewedBy(null);
         req.setSubmittedAt(LocalDateTime.now());
         req = certificateRequestRepository.save(req);
+
+        // statut_kyc repassé EN_COURS après re-soumission suite à correction
+        final cm.gov.pki.entity.User reqUser = req.getUser();
+        reqUser.setStatutKyc("EN_COURS");
+        userRepository.save(reqUser);
 
         auditService.log(user, cm.gov.pki.entity.AuditLog.Actions.REQUEST_UPDATED, "CertificateRequest", req.getId(), null);
 

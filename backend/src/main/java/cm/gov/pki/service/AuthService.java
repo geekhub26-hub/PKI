@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Date;
@@ -273,19 +274,82 @@ public class AuthService {
     }
 
     /**
-     * Génère un Refresh Token JWT
+     * Génère un Refresh Token JWT et persiste son hash SHA-256 pour invalidation ciblée.
      */
     private String generateRefreshToken(User user) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + refreshExpiration);
 
-        return Jwts.builder()
+        String token = Jwts.builder()
                 .subject(user.getId().toString())
                 .claim("type", "refresh")
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(getSigningKey())
                 .compact();
+
+        try {
+            MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes = sha256.digest(token.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hashBytes) sb.append(String.format("%02x", b));
+            user.setRefreshTokenHash(sb.toString());
+            userRepository.save(user);
+        } catch (Exception e) {
+            log.warn("Impossible de stocker le refresh token hash: {}", e.getMessage());
+        }
+
+        return token;
+    }
+
+    /**
+     * Valide un refresh token (signature + hash DB), émet de nouveaux tokens (rotation).
+     */
+    @Transactional
+    public AuthDTO.JwtResponse refreshAccessToken(String rawToken) {
+        Claims claims;
+        try {
+            claims = validateToken(rawToken);
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Refresh token invalide ou expiré");
+        }
+        if (!"refresh".equalsIgnoreCase(String.valueOf(claims.get("type")))) {
+            throw new RuntimeException("Token invalide");
+        }
+        UUID userId = UUID.fromString(claims.getSubject());
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Utilisateur introuvable"));
+
+        // Vérification du hash pour détecter les tokens révoqués
+        if (user.getRefreshTokenHash() != null) {
+            try {
+                MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+                byte[] hashBytes = sha256.digest(rawToken.getBytes(StandardCharsets.UTF_8));
+                StringBuilder sb = new StringBuilder();
+                for (byte b : hashBytes) sb.append(String.format("%02x", b));
+                if (!sb.toString().equals(user.getRefreshTokenHash())) {
+                    throw new RuntimeException("Refresh token révoqué");
+                }
+            } catch (java.security.NoSuchAlgorithmException e) {
+                log.warn("SHA-256 indisponible", e);
+            }
+        }
+
+        if (!Boolean.TRUE.equals(user.getIsActive())) {
+            throw new RuntimeException("Compte inactif");
+        }
+
+        // Rotation : nouveau pair access + refresh (l'ancien hash est écrasé)
+        String newAccessToken = generateAccessToken(user);
+        String newRefreshToken = generateRefreshToken(user);
+
+        AuthDTO.JwtResponse response = new AuthDTO.JwtResponse();
+        response.setAccessToken(newAccessToken);
+        response.setRefreshToken(newRefreshToken);
+        response.setTokenType("Bearer");
+        response.setExpiresIn(jwtExpiration);
+        response.setUser(mapToDTO(user));
+        return response;
     }
 
     /**

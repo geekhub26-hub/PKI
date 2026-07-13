@@ -534,6 +534,11 @@ public class AdminController {
 		req.setValidationToken(validationToken);
 		req.setTokenExpiresAt(tokenExpiresAt);
 		certificateRequestRepository.save(req);
+
+		// statut_kyc : VERIFIE dès que le certificat est émis
+		cm.gov.pki.entity.User requestOwner = req.getUser();
+		requestOwner.setStatutKyc("VERIFIE");
+		userRepository.save(requestOwner);
 		auditService.log(admin, cm.gov.pki.entity.AuditLog.Actions.CERTIFICATE_ISSUED, "CertificateRequest", req.getId(),
 				java.util.Map.of("validityDays", validityDays));
 		
@@ -562,6 +567,11 @@ public class AdminController {
 		req.setReviewedAt(java.time.LocalDateTime.now());
 		req.setReviewedBy(admin);
 		certificateRequestRepository.save(req);
+
+		// statut_kyc : REJETE
+		cm.gov.pki.entity.User rejectedUser = req.getUser();
+		rejectedUser.setStatutKyc("REJETE");
+		userRepository.save(rejectedUser);
 		auditService.log(admin, cm.gov.pki.entity.AuditLog.Actions.CSR_REJECTED, "CertificateRequest", req.getId(),
 				java.util.Map.of("reason", req.getRejectionReason()));
 		
@@ -764,6 +774,98 @@ public class AdminController {
 			log.error("Erreur stats avancées", ex);
 			return ResponseEntity.status(500).body(java.util.Map.of("error", "Erreur serveur"));
 		}
+	}
+
+	@GetMapping("/stats/export/pdf")
+	public ResponseEntity<byte[]> exportStatsPdf(Authentication authentication) {
+		try {
+			cm.gov.pki.entity.User caller = callerFrom(authentication);
+			java.util.UUID scopeId = scopeEntiteId(caller);
+
+			// Données du dashboard
+			long totalUsers = scopeId != null ? userRepository.countByEntite_Id(scopeId) : userRepository.count();
+			long pending    = scopeId != null
+				? certificateRequestRepository.countByStatusInAndUser_Entite_Id(java.util.List.of("PENDING_REVIEW", "PENDING"), scopeId)
+				: certificateRequestRepository.countByStatusIn(java.util.List.of("PENDING_REVIEW", "PENDING"));
+			long issued   = certificateRequestRepository.countByStatus("ISSUED");
+			long rejected = certificateRequestRepository.countByStatus("REJECTED");
+
+			// Stats avancées (30 derniers jours)
+			java.time.LocalDateTime from = java.time.LocalDateTime.now().minusDays(30);
+			java.time.LocalDateTime to   = java.time.LocalDateTime.now();
+			Double avgH = certificateRequestRepository.avgProcessingHours(from, to);
+			java.util.Map<String, Long> parStatut = new java.util.LinkedHashMap<>();
+			for (Object[] row : certificateRequestRepository.countByStatusGrouped(from, to, scopeId)) {
+				parStatut.put((String) row[0], (Long) row[1]);
+			}
+
+			// Génération PDF avec OpenPDF
+			java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+			com.lowagie.text.Document doc = new com.lowagie.text.Document(com.lowagie.text.PageSize.A4, 40, 40, 60, 40);
+			com.lowagie.text.pdf.PdfWriter.getInstance(doc, baos);
+			doc.open();
+
+			// Titre
+			com.lowagie.text.Font titleFont = new com.lowagie.text.Font(com.lowagie.text.Font.HELVETICA, 18, com.lowagie.text.Font.BOLD);
+			com.lowagie.text.Font headFont  = new com.lowagie.text.Font(com.lowagie.text.Font.HELVETICA, 12, com.lowagie.text.Font.BOLD);
+			com.lowagie.text.Font bodyFont  = new com.lowagie.text.Font(com.lowagie.text.Font.HELVETICA, 11);
+			com.lowagie.text.Font smallFont = new com.lowagie.text.Font(com.lowagie.text.Font.HELVETICA, 9, com.lowagie.text.Font.ITALIC);
+
+			doc.add(new com.lowagie.text.Paragraph("PKI Souverain — Rapport de Tableau de Bord", titleFont));
+			doc.add(new com.lowagie.text.Paragraph("Généré le : " + java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")), smallFont));
+			doc.add(com.lowagie.text.Chunk.NEWLINE);
+
+			// Section KPI
+			doc.add(new com.lowagie.text.Paragraph("Indicateurs clés", headFont));
+			com.lowagie.text.pdf.PdfPTable kpiTable = new com.lowagie.text.pdf.PdfPTable(2);
+			kpiTable.setWidthPercentage(70);
+			kpiTable.setSpacingBefore(8f);
+			kpiTable.setSpacingAfter(16f);
+			addKpiRow(kpiTable, "Utilisateurs", String.valueOf(totalUsers), bodyFont);
+			addKpiRow(kpiTable, "Demandes en attente", String.valueOf(pending), bodyFont);
+			addKpiRow(kpiTable, "Certificats émis", String.valueOf(issued), bodyFont);
+			addKpiRow(kpiTable, "Demandes rejetées", String.valueOf(rejected), bodyFont);
+			if (avgH != null) addKpiRow(kpiTable, "Délai moyen traitement (h)", String.format("%.1f", avgH), bodyFont);
+			doc.add(kpiTable);
+
+			// Section répartition par statut (30j)
+			doc.add(new com.lowagie.text.Paragraph("Répartition par statut — 30 derniers jours", headFont));
+			com.lowagie.text.pdf.PdfPTable statTable = new com.lowagie.text.pdf.PdfPTable(2);
+			statTable.setWidthPercentage(70);
+			statTable.setSpacingBefore(8f);
+			statTable.setSpacingAfter(16f);
+			for (java.util.Map.Entry<String, Long> e : parStatut.entrySet()) {
+				addKpiRow(statTable, e.getKey(), String.valueOf(e.getValue()), bodyFont);
+			}
+			if (parStatut.isEmpty()) {
+				com.lowagie.text.pdf.PdfPCell empty = new com.lowagie.text.pdf.PdfPCell(new com.lowagie.text.Phrase("Aucune donnée", smallFont));
+				empty.setColspan(2);
+				empty.setBorder(com.lowagie.text.Rectangle.NO_BORDER);
+				statTable.addCell(empty);
+			}
+			doc.add(statTable);
+
+			doc.close();
+			byte[] pdf = baos.toByteArray();
+			return ResponseEntity.ok()
+				.header("Content-Disposition", "attachment; filename=\"dashboard-pki.pdf\"")
+				.header("Content-Type", "application/pdf")
+				.body(pdf);
+		} catch (Exception ex) {
+			log.error("Erreur export PDF stats", ex);
+			return ResponseEntity.status(500).build();
+		}
+	}
+
+	private static void addKpiRow(com.lowagie.text.pdf.PdfPTable table, String label, String value, com.lowagie.text.Font font) {
+		com.lowagie.text.pdf.PdfPCell labelCell = new com.lowagie.text.pdf.PdfPCell(new com.lowagie.text.Phrase(label, font));
+		com.lowagie.text.pdf.PdfPCell valueCell = new com.lowagie.text.pdf.PdfPCell(new com.lowagie.text.Phrase(value, font));
+		labelCell.setBorder(com.lowagie.text.Rectangle.BOTTOM);
+		valueCell.setBorder(com.lowagie.text.Rectangle.BOTTOM);
+		labelCell.setPadding(6f);
+		valueCell.setPadding(6f);
+		table.addCell(labelCell);
+		table.addCell(valueCell);
 	}
 
 	// ── Helpers isolation entité ──────────────────────────────────────────────
