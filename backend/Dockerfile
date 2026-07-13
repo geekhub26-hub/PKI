@@ -14,4 +14,4 @@ RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/target/*.jar app.jar
 
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-XX:+UseG1GC", "-XX:G1HeapRegionSize=8m", "-jar", "app.jar"]
