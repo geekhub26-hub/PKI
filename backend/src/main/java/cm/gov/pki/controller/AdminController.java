@@ -239,16 +239,24 @@ public class AdminController {
 	}
 
 	@GetMapping("/crl")
-	public ResponseEntity<String> downloadCrl() throws Exception {
-		CAConfiguration ca = caConfigurationRepository.findFirstByIsActiveTrueOrderByCreatedAtDesc()
-			.orElseThrow(() -> new RuntimeException("No active CA found"));
-		if (ca.caCrlPath == null) {
-			String crl = caService.generateCRL(ca);
-			return ResponseEntity.ok(crl);
+	public ResponseEntity<String> downloadCrl() {
+		var caOpt = caConfigurationRepository.findFirstByIsActiveTrueOrderByCreatedAtDesc();
+		if (caOpt.isEmpty()) return ResponseEntity.status(404).body("Aucune AC active configurée.");
+		CAConfiguration ca = caOpt.get();
+		try {
+			if (ca.caCrlPath == null) {
+				return ResponseEntity.ok(caService.generateCRL(ca));
+			}
+			java.nio.file.Path p = java.nio.file.Path.of(ca.caCrlPath);
+			if (!java.nio.file.Files.exists(p)) {
+				// Filesystem éphémère (Render) : régénérer la CRL
+				return ResponseEntity.ok(caService.generateCRL(ca));
+			}
+			return ResponseEntity.ok(java.nio.file.Files.readString(p));
+		} catch (Exception ex) {
+			log.error("Erreur lecture CRL", ex);
+			return ResponseEntity.status(503).body("CRL temporairement indisponible.");
 		}
-		java.nio.file.Path p = java.nio.file.Path.of(ca.caCrlPath);
-		String content = java.nio.file.Files.readString(p);
-		return ResponseEntity.ok(content);
 	}
 
 	@PostMapping("/rotate-crl")
