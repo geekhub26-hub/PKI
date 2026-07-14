@@ -111,6 +111,7 @@ apiClient.interceptors.response.use(
 
       if (isRefreshing) {
         // Une autre requête est déjà en train de refresher : attendre le résultat
+        originalRequest._retried = true; // évite une 2e tentative de refresh si ce retry échoue
         return new Promise((resolve) => {
           refreshQueue.push((newToken: string) => {
             originalRequest.headers = originalRequest.headers || {};
