@@ -78,6 +78,13 @@ public class AuthController {
 		}
 	}
 
+	@PostMapping("/logout")
+	public ResponseEntity<?> logout(@RequestBody(required = false) Map<String, String> body) {
+		String refreshToken = body != null ? body.get("refreshToken") : null;
+		authService.logout(refreshToken);
+		return ResponseEntity.ok(Map.of("message", "Déconnecté avec succès"));
+	}
+
 	@PostMapping("/forgot-password")
 	public ResponseEntity<?> forgotPassword(@RequestBody Map<String, String> request) {
 		String email = request.get("email");

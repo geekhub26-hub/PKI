@@ -289,6 +289,30 @@ public class AuthService {
     }
 
     /**
+     * Invalide le refresh token côté serveur (efface refreshTokenHash).
+     * Accepte un token expiré — la signature suffit à identifier l'utilisateur.
+     */
+    @Transactional
+    public void logout(String rawRefreshToken) {
+        if (rawRefreshToken == null || rawRefreshToken.isBlank()) return;
+        UUID userId;
+        try {
+            userId = UUID.fromString(
+                Jwts.parser().verifyWith(getSigningKey()).build()
+                    .parseSignedClaims(rawRefreshToken).getPayload().getSubject());
+        } catch (ExpiredJwtException e) {
+            userId = UUID.fromString(e.getClaims().getSubject());
+        } catch (Exception e) {
+            return;
+        }
+        userRepository.findById(userId).ifPresent(user -> {
+            user.setRefreshTokenHash(null);
+            userRepository.save(user);
+            log.info("Refresh token invalidé pour {}", user.getEmail());
+        });
+    }
+
+    /**
      * Génère un Access Token JWT
      */
     private String generateAccessToken(User user) {
