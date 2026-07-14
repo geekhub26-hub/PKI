@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -343,6 +344,7 @@ public class AdminController {
 		return ResponseEntity.ok(resp);
 	}
 
+	@PreAuthorize("hasRole('SUPER_ADMIN')")
 	@Transactional(readOnly = true)
 	@GetMapping("/audit-logs")
 	public ResponseEntity<?> listAuditLogs(
@@ -370,6 +372,7 @@ public class AdminController {
 		return ResponseEntity.ok(resp);
 	}
 
+	@PreAuthorize("hasRole('SUPER_ADMIN')")
 	@DeleteMapping("/audit-logs/{id}")
 	public ResponseEntity<?> deleteAuditLog(
 			@PathVariable UUID id,
@@ -600,6 +603,7 @@ public class AdminController {
 		return ResponseEntity.ok(java.util.Map.of("status", "rejected"));
 	}
 
+	@PreAuthorize("hasRole('SUPER_ADMIN')")
 	@GetMapping("/users")
 	public ResponseEntity<?> listUsers(
 			Authentication authentication,
@@ -629,6 +633,7 @@ public class AdminController {
 		}
 	}
 
+	@PreAuthorize("hasRole('SUPER_ADMIN')")
 	@DeleteMapping("/users/{userId}")
 	public ResponseEntity<?> deleteUser(
 			Authentication authentication,
