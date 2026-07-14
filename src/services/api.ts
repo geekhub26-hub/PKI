@@ -78,19 +78,70 @@ apiClient.interceptors.request.use(
   (error: any) => Promise.reject(error)
 );
 
-// Intercepteur pour gérer les erreurs 401 (token expiré)
+// Auto-refresh : une seule tentative de refresh en cours à la fois
+let isRefreshing = false;
+let refreshQueue: Array<(token: string) => void> = [];
+
+function drainRefreshQueue(newToken: string) {
+  refreshQueue.forEach(cb => cb(newToken));
+  refreshQueue = [];
+}
+
+function redirectToLogin() {
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('refreshToken');
+  window.location.href = '/#/login';
+}
+
+// Intercepteur pour gérer les erreurs 401 (token expiré) avec auto-refresh
 apiClient.interceptors.response.use(
   (response: any) => response,
   async (error: any) => {
+    const originalRequest = error.config;
+
+    if (error.response?.status === 401 && !originalRequest._retried) {
+      originalRequest._retried = true;
+      const refreshToken = localStorage.getItem('refreshToken');
+
+      if (!refreshToken) {
+        redirectToLogin();
+        error.message = readApiError(error, 'Session expirée.');
+        return Promise.reject(error);
+      }
+
+      if (isRefreshing) {
+        // Une autre requête est déjà en train de refresher : attendre le résultat
+        return new Promise((resolve) => {
+          refreshQueue.push((newToken: string) => {
+            originalRequest.headers = originalRequest.headers || {};
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            resolve(apiClient(originalRequest));
+          });
+        });
+      }
+
+      isRefreshing = true;
+      try {
+        const resp = await axios.post(`${API_BASE_URL_CLEAN}/auth/refresh`, { refreshToken });
+        const { accessToken, refreshToken: newRefresh } = resp.data;
+        localStorage.setItem('accessToken', accessToken);
+        localStorage.setItem('refreshToken', newRefresh);
+        drainRefreshQueue(accessToken);
+        originalRequest.headers = originalRequest.headers || {};
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        return apiClient(originalRequest);
+      } catch {
+        redirectToLogin();
+        error.message = 'Session expirée. Veuillez vous reconnecter.';
+        notify('error', error.message);
+        return Promise.reject(error);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
     error.message = readApiError(error, 'Erreur de communication avec le serveur.');
     notify('error', error.message);
-
-    if (error.response?.status === 401) {
-      // Token expiré : redirection vers login
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      window.location.href = '/#/login';
-    }
     return Promise.reject(error);
   }
 );
