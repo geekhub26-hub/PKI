@@ -142,7 +142,10 @@ apiClient.interceptors.response.use(
     }
 
     error.message = readApiError(error, 'Erreur de communication avec le serveur.');
-    notify('error', error.message);
+    // Les appels avec _suppressToast=true gèrent leur propre affichage d'erreur
+    if (!error.config?._suppressToast) {
+      notify('error', error.message);
+    }
     return Promise.reject(error);
   }
 );
@@ -456,7 +459,7 @@ export const userService = {
   },
 
   getCrl: async (): Promise<string> => {
-    const response = await apiClient.get<string>('/user/crl');
+    const response = await apiClient.get<string>('/user/crl', { _suppressToast: true } as any);
     return response.data;
   },
 };
@@ -575,7 +578,8 @@ export const adminService = {
   },
 
   getCrl: async (): Promise<string> => {
-    const response = await apiClient.get<string>('/admin/crl');
+    // La page gère son propre affichage d'erreur — pas de toast global
+    const response = await apiClient.get<string>('/admin/crl', { _suppressToast: true } as any);
     return response.data;
   },
 
