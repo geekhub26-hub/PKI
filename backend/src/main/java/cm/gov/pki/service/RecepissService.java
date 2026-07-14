@@ -711,14 +711,23 @@ public class RecepissService {
         }
 
         // 4. Délai moyen de traitement (soumission demande → génération récépissé, en jours)
-        java.util.OptionalDouble avgDelai = all.stream()
-                .filter(r -> r.getCertificateRequest() != null
-                          && r.getCertificateRequest().getCreatedAt() != null)
-                .mapToDouble(r -> java.time.Duration.between(
-                        r.getCertificateRequest().getCreatedAt(), r.getDateGeneration()).toMinutes() / 1440.0)
-                .average();
-        double delaiMoyenJours = avgDelai.isPresent()
-                ? Math.round(avgDelai.getAsDouble() * 10.0) / 10.0 : 0.0;
+        double delaiMoyenJours = 0.0;
+        try {
+            java.util.OptionalDouble avgDelai = all.stream()
+                    .filter(r -> {
+                        try { return r.getCertificateRequest() != null
+                                   && r.getCertificateRequest().getCreatedAt() != null; }
+                        catch (Exception ex) { return false; }
+                    })
+                    .mapToDouble(r -> java.time.Duration.between(
+                            r.getCertificateRequest().getCreatedAt(), r.getDateGeneration()).toMinutes() / 1440.0)
+                    .average();
+            if (avgDelai.isPresent()) {
+                delaiMoyenJours = Math.round(avgDelai.getAsDouble() * 10.0) / 10.0;
+            }
+        } catch (Exception ex) {
+            log.warn("Impossible de calculer le délai moyen : {}", ex.getMessage());
+        }
 
         // 5. Top 5 entités (requête DB directe, indépendante des filtres date/statut/type)
         List<Object[]> top5EntitesRaw = entiteId != null
@@ -735,21 +744,26 @@ public class RecepissService {
                 .collect(java.util.stream.Collectors.toList());
 
         // 6. Top 5 agents AEL (requête DB directe)
-        List<Object[]> top5AgentsRaw = entiteId != null
-                ? recepissRepository.top5AgentsForEntite(entiteId)
-                : recepissRepository.top5AgentsGlobal(org.springframework.data.domain.PageRequest.of(0, 5));
-        List<Map<String, Object>> top5Agents = top5AgentsRaw.stream()
-                .map(row -> {
-                    Map<String, Object> m = new LinkedHashMap<>();
-                    m.put("agentId", row[0] != null ? row[0].toString() : "");
-                    String prenom = row[1] != null ? row[1].toString() : "";
-                    String nom    = row[2] != null ? row[2].toString() : "";
-                    m.put("nom",   (prenom + " " + nom).trim());
-                    m.put("email", row[3] != null ? row[3].toString() : "");
-                    m.put("count", row[4]);
-                    return m;
-                })
-                .collect(java.util.stream.Collectors.toList());
+        List<Map<String, Object>> top5Agents = new ArrayList<>();
+        try {
+            List<Object[]> top5AgentsRaw = entiteId != null
+                    ? recepissRepository.top5AgentsForEntite(entiteId)
+                    : recepissRepository.top5AgentsGlobal(org.springframework.data.domain.PageRequest.of(0, 5));
+            top5Agents = top5AgentsRaw.stream()
+                    .map(row -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("agentId", row[0] != null ? row[0].toString() : "");
+                        String prenom = row[1] != null ? row[1].toString() : "";
+                        String nom    = row[2] != null ? row[2].toString() : "";
+                        m.put("nom",   (prenom + " " + nom).trim());
+                        m.put("email", row[3] != null ? row[3].toString() : "");
+                        m.put("count", row[4]);
+                        return m;
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+        } catch (Exception ex) {
+            log.warn("Impossible de calculer le top5 agents : {}", ex.getMessage());
+        }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("total",           total);
