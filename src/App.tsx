@@ -149,7 +149,7 @@ function App() {
 
             <Route path="/admin/dashboard" element={<DashboardAdminPage />} />
             <Route path="/admin/stats" element={<AdminStatsPage />} />
-            <Route path="/admin/manage-users" element={<AdminManageUsersPage />} />
+            <Route path="/admin/manage-users" element={<ProtectedRoute superAdminOnly><AdminManageUsersPage /></ProtectedRoute>} />
             <Route path="/admin/generate-ca" element={<AdminGenerateCaPage />} />
             <Route path="/admin/sign-csr" element={<AdminSignCsrPage />} />
             <Route path="/admin/generate-crl" element={<AdminGenerateCrlPage />} />
@@ -157,7 +157,7 @@ function App() {
             <Route path="/admin/download-crl" element={<AdminDownloadCrlPage />} />
             <Route path="/admin/requests" element={<AdminRequestsList />} />
             <Route path="/admin/requests/:id" element={<AdminRequestDetail />} />
-            <Route path="/admin/audit" element={<AdminAuditPage />} />
+            <Route path="/admin/audit" element={<ProtectedRoute superAdminOnly><AdminAuditPage /></ProtectedRoute>} />
             <Route path="/admin/recepisses/stats" element={<AdminRecepisseStatsPage />} />
             <Route path="/superadmin/settings" element={<SuperAdminSettingsPage />} />
             <Route path="/admin/entites" element={<AdminEntitesPage />} />
@@ -170,7 +170,7 @@ function App() {
   );
 }
 
-function ProtectedRoute({ children, adminOnly = false }: any) {
+function ProtectedRoute({ children, adminOnly = false, superAdminOnly = false }: any) {
   const { isAuthenticated, user } = useAuthStore();
 
   if (!isAuthenticated) {
@@ -180,6 +180,10 @@ function ProtectedRoute({ children, adminOnly = false }: any) {
   const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'AE_CENTRALE', 'ADMIN_AEL', 'AEL'];
   if (adminOnly && !adminRoles.includes(user?.role ?? '')) {
     return <Navigate to="/dashboard" />;
+  }
+
+  if (superAdminOnly && user?.role !== 'SUPER_ADMIN') {
+    return <Navigate to="/admin/dashboard" />;
   }
 
   return children;

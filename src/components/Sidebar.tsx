@@ -30,13 +30,13 @@ const adminLinks = [
   { to: '/admin/generate-crl',       label: 'CRL / Rotation',    icon: RefreshCw },
   { to: '/admin/revoke-certificate', label: 'Révoquer cert.',    icon: XCircle },
   { to: '/admin/download-crl',       label: 'Télécharger CRL',   icon: Download },
-  { to: '/admin/audit',              label: "Journal d'audit",   icon: FileText },
-  { to: '/admin/manage-users',       label: 'Utilisateurs',      icon: Users },
   { to: '/admin/entites',            label: 'Entités',           icon: Building2 },
 ];
 
 const superAdminLinks = [
-  { to: '/superadmin/settings', label: 'Paramètres & Admins', icon: Settings2 },
+  { to: '/superadmin/settings',   label: 'Paramètres & Admins', icon: Settings2 },
+  { to: '/admin/audit',           label: "Journal d'audit",     icon: FileText },
+  { to: '/admin/manage-users',    label: 'Utilisateurs',        icon: Users },
 ];
 
 const ROLE_META: Record<string, { label: string; color: string; bg: string; darkBg: string; icon: React.ElementType }> = {
