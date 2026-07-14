@@ -258,9 +258,17 @@ export const authService = {
   },
 
   /**
-   * Déconnexion
+   * Déconnexion — invalide le refresh token côté serveur avant de vider le localStorage.
    */
   logout: () => {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (refreshToken) {
+      fetch(`${API_BASE_URL_CLEAN}/auth/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      }).catch(() => {});
+    }
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     window.location.href = '/#/login';
