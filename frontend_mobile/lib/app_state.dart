@@ -13,11 +13,13 @@ class AppState extends ChangeNotifier {
   AppState(this.api);
 
   static const _tokenKey = 'mobile_access_token';
+  static const _refreshTokenKey = 'mobile_refresh_token';
   static const _seenNotifKey = 'mobile_seen_notifications';
   static const _dismissedNotifKey = 'mobile_dismissed_notifications';
   static const _secureStorage = FlutterSecureStorage();
 
   String? _token;
+  String? _refreshToken;
   AppUser? user;
   bool loading = false;
 
@@ -33,6 +35,7 @@ class AppState extends ChangeNotifier {
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     _token = await _secureStorage.read(key: _tokenKey);
+    _refreshToken = await _secureStorage.read(key: _refreshTokenKey);
     final legacyToken = prefs.getString(_tokenKey);
     if (_token == null && legacyToken != null && legacyToken.isNotEmpty) {
       _token = legacyToken;
@@ -48,10 +51,43 @@ class AppState extends ChangeNotifier {
     try {
       user = await api.getMe(_token!);
       await refreshUserData();
-    } catch (_) {
+    } catch (e) {
+      if (_isSessionExpiredError(e) && await _tryRefreshToken()) {
+        try {
+          user = await api.getMe(_token!);
+          await refreshUserData();
+          notifyListeners();
+          return;
+        } catch (_) {}
+      }
       await logout();
     }
     notifyListeners();
+  }
+
+  bool _isSessionExpiredError(Object e) {
+    if (e is! ApiException) return false;
+    final msg = e.message.toLowerCase();
+    return msg.contains('session') || msg.contains('expir') || msg.contains('token');
+  }
+
+  Future<bool> _tryRefreshToken() async {
+    if (_refreshToken == null) return false;
+    try {
+      final res = await api.refreshToken(_refreshToken!);
+      final newAccess = (res['accessToken'] ?? res['token'] ?? '').toString();
+      final newRefresh = (res['refreshToken'] ?? '').toString();
+      if (newAccess.isEmpty) return false;
+      _token = newAccess;
+      await _secureStorage.write(key: _tokenKey, value: _token!);
+      if (newRefresh.isNotEmpty) {
+        _refreshToken = newRefresh;
+        await _secureStorage.write(key: _refreshTokenKey, value: newRefresh);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> refreshUserData() async {
@@ -76,7 +112,12 @@ class AppState extends ChangeNotifier {
       final accessToken = (res['accessToken'] ?? res['token'] ?? '').toString();
       if (accessToken.isEmpty) throw ApiException('Token absent');
       _token = accessToken;
+      final refreshTokenValue = (res['refreshToken'] ?? '').toString();
       await _secureStorage.write(key: _tokenKey, value: _token!);
+      if (refreshTokenValue.isNotEmpty) {
+        _refreshToken = refreshTokenValue;
+        await _secureStorage.write(key: _refreshTokenKey, value: refreshTokenValue);
+      }
       user = await api.getMe(_token!);
       // Do not block login if some optional endpoints (requests/certificates)
       // are temporarily failing on the server.
@@ -100,6 +141,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> logout() async {
     _token = null;
+    _refreshToken = null;
     user = null;
     requests = [];
     certificates = [];
@@ -108,6 +150,7 @@ class AppState extends ChangeNotifier {
     dismissedNotifications = {};
     final prefs = await SharedPreferences.getInstance();
     await _secureStorage.delete(key: _tokenKey);
+    await _secureStorage.delete(key: _refreshTokenKey);
     await prefs.remove(_tokenKey);
     await prefs.remove(_seenNotifKey);
     await prefs.remove(_dismissedNotifKey);

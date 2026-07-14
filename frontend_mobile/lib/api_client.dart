@@ -204,6 +204,16 @@ class ApiClient {
     if (res.statusCode >= 400) throw ApiException(_extractError(res.body));
   }
 
+  Future<Map<String, dynamic>> refreshToken(String refreshToken) async {
+    final res = await _safePost(
+      _uri('/auth/refresh'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'refreshToken': refreshToken}),
+    );
+    if (res.statusCode >= 400) throw ApiException(_extractError(res.body));
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
   Future<void> forgotPassword(String email) async {
     final res = await _safePost(
       _uri('/auth/forgot-password'),
