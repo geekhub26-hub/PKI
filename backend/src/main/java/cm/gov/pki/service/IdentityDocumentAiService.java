@@ -342,7 +342,12 @@ public class IdentityDocumentAiService {
         }
 
         log.warn("Face comparison unavailable after {} attempts: {}", attempts, lastErr != null ? lastErr.getMessage() : "unknown");
-        return new FaceComparisonResult(false, 0.0, "Service de comparaison faciale indisponible — réessayez dans quelques secondes");
+        if (strictMode) {
+            return new FaceComparisonResult(false, 0.0, "Service de comparaison faciale indisponible — réessayez dans quelques secondes");
+        }
+        // Mode souple : si le service est down, on ne bloque pas l'usager
+        log.warn("Face comparison unavailable — soft mode: accepting request without face check");
+        return new FaceComparisonResult(true, 0.0, "Comparaison faciale non disponible (mode souple)");
     }
 
     private static String deriveCompareUrl(String validateUrl) {
