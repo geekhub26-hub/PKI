@@ -53,7 +53,8 @@ export default function AdminRecepisseStatsPage() {
   const [stats, setStats]         = useState<Stats | null>(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting]     = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [entites, setEntites]     = useState<Entite[]>([]);
 
   const [dateDebut, setDateDebut]   = useState('');
@@ -98,22 +99,40 @@ export default function AdminRecepisseStatsPage() {
     setDateDebut(''); setDateFin(''); setStatut('ALL'); setTypeCertif(''); setEntiteId('');
   };
 
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const exportCsv = async () => {
     setExporting(true);
     try {
       const r = await fetch(`${API_BASE}/admin/recepisses/export`, { headers: authHeader() });
       if (!r.ok) throw new Error();
-      const blob = await r.blob();
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = 'recepisses.csv';
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadBlob(await r.blob(), 'recepisses.csv');
     } catch {
-      alert("Échec de l'export.");
+      alert("Échec de l'export CSV.");
     } finally {
       setExporting(false);
+    }
+  };
+
+  const exportPdf = async () => {
+    setExportingPdf(true);
+    try {
+      const qs = buildQuery();
+      const r  = await fetch(
+        `${API_BASE}/admin/recepisses/stats/export/pdf${qs ? '?' + qs : ''}`,
+        { headers: authHeader() }
+      );
+      if (!r.ok) throw new Error();
+      downloadBlob(await r.blob(), 'stats-recepisses.pdf');
+    } catch {
+      alert("Échec de l'export PDF.");
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -152,12 +171,20 @@ export default function AdminRecepisseStatsPage() {
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <button
+              onClick={exportPdf}
+              disabled={exportingPdf}
+              className="btn btn-primary"
+              style={{ padding: '7px 14px', fontSize: '13px' }}
+            >
+              <Download size={14} /> {exportingPdf ? 'PDF...' : 'Exporter PDF'}
+            </button>
+            <button
               onClick={exportCsv}
               disabled={exporting}
               className="btn btn-green"
               style={{ padding: '7px 14px', fontSize: '13px' }}
             >
-              <Download size={14} /> {exporting ? 'Export...' : 'Exporter CSV'}
+              <Download size={14} /> {exporting ? 'CSV...' : 'Exporter CSV'}
             </button>
             <button
               onClick={load}
