@@ -634,6 +634,20 @@ public class RecepissService {
                                         String statut,
                                         String typeCertif,
                                         String profilInitiateur) {
+        try {
+        return getStatsImpl(entiteId, dateDebut, dateFin, statut, typeCertif, profilInitiateur);
+        } catch (Exception ex) {
+            log.error("❌ getStats a échoué — type={} message={}", ex.getClass().getName(), ex.getMessage(), ex);
+            throw ex;
+        }
+    }
+
+    private Map<String, Object> getStatsImpl(UUID entiteId,
+                                              java.time.LocalDate dateDebut,
+                                              java.time.LocalDate dateFin,
+                                              String statut,
+                                              String typeCertif,
+                                              String profilInitiateur) {
         // 1. Charger selon l'entité (isolation AEL)
         List<Recepisse> all = entiteId != null
                 ? new ArrayList<>(recepissRepository.findByAgentEntiteId(entiteId))
