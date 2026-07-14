@@ -385,8 +385,9 @@ public class RecepissService {
                                   java.time.LocalDate dateDebut,
                                   java.time.LocalDate dateFin,
                                   String statut,
-                                  String typeCertif) {
-        Map<String, Object> s = getStats(entiteId, dateDebut, dateFin, statut, typeCertif);
+                                  String typeCertif,
+                                  String profilInitiateur) {
+        Map<String, Object> s = getStats(entiteId, dateDebut, dateFin, statut, typeCertif, profilInitiateur);
         Map<String, Long> parStatut = (Map<String, Long>) s.get("parStatut");
         List<Map<String, Object>> volumesMois   = (List<Map<String, Object>>) s.get("volumesMois");
         List<Map<String, Object>> top5Entites   = (List<Map<String, Object>>) s.get("top5Entites");
@@ -610,15 +611,25 @@ public class RecepissService {
 
     /** Stats sans filtre (compatibilité SuperAdminController). */
     public Map<String, Object> getStats() {
-        return getStats(null, null, null, null, null);
+        return getStats(null, null, null, null, null, null);
     }
 
-    /** Stats avec filtres optionnels + isolation par entité. */
+    /** Stats avec filtres optionnels + isolation par entité (5 params — backward compat). */
     public Map<String, Object> getStats(UUID entiteId,
                                         java.time.LocalDate dateDebut,
                                         java.time.LocalDate dateFin,
                                         String statut,
                                         String typeCertif) {
+        return getStats(entiteId, dateDebut, dateFin, statut, typeCertif, null);
+    }
+
+    /** Stats avec tous les filtres CDC : entité, dates, statut, type, profil initiateur. */
+    public Map<String, Object> getStats(UUID entiteId,
+                                        java.time.LocalDate dateDebut,
+                                        java.time.LocalDate dateFin,
+                                        String statut,
+                                        String typeCertif,
+                                        String profilInitiateur) {
         // 1. Charger selon l'entité (isolation AEL)
         List<Recepisse> all = entiteId != null
                 ? new ArrayList<>(recepissRepository.findByAgentEntiteId(entiteId))
@@ -655,6 +666,13 @@ public class RecepissService {
                     .filter(r -> r.getTypeCertificat() != null && r.getTypeCertificat().toLowerCase().contains(tc))
                     .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         }
+        if (profilInitiateur != null && !profilInitiateur.isBlank() && !"ALL".equals(profilInitiateur)) {
+            all = all.stream()
+                    .filter(r -> r.getAgent() != null
+                              && r.getAgent().getRole() != null
+                              && profilInitiateur.equals(r.getAgent().getRole().name()))
+                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        }
 
         long total = all.size();
 
@@ -688,16 +706,43 @@ public class RecepissService {
             volumesMois.add(Map.of("mois", m.toString(), "count", count));
         }
 
-        // 4. Top 5 entités par volume (requête DB directe, indépendante des filtres date/statut/type)
-        List<Object[]> top5Raw = entiteId != null
+        // 4. Délai moyen de traitement (soumission demande → génération récépissé, en jours)
+        java.util.OptionalDouble avgDelai = all.stream()
+                .filter(r -> r.getCertificateRequest() != null
+                          && r.getCertificateRequest().getCreatedAt() != null)
+                .mapToDouble(r -> java.time.Duration.between(
+                        r.getCertificateRequest().getCreatedAt(), r.getDateGeneration()).toMinutes() / 1440.0)
+                .average();
+        double delaiMoyenJours = avgDelai.isPresent()
+                ? Math.round(avgDelai.getAsDouble() * 10.0) / 10.0 : 0.0;
+
+        // 5. Top 5 entités (requête DB directe, indépendante des filtres date/statut/type)
+        List<Object[]> top5EntitesRaw = entiteId != null
                 ? recepissRepository.top5EntitesForEntite(entiteId)
                 : recepissRepository.top5EntitesGlobal(org.springframework.data.domain.PageRequest.of(0, 5));
-        List<Map<String, Object>> top5Entites = top5Raw.stream()
+        List<Map<String, Object>> top5Entites = top5EntitesRaw.stream()
                 .map(row -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("entiteId", row[0] != null ? row[0].toString() : "");
                     m.put("nom",      row[1] != null ? row[1].toString() : "");
                     m.put("count",    row[2]);
+                    return m;
+                })
+                .collect(java.util.stream.Collectors.toList());
+
+        // 6. Top 5 agents AEL (requête DB directe)
+        List<Object[]> top5AgentsRaw = entiteId != null
+                ? recepissRepository.top5AgentsForEntite(entiteId)
+                : recepissRepository.top5AgentsGlobal(org.springframework.data.domain.PageRequest.of(0, 5));
+        List<Map<String, Object>> top5Agents = top5AgentsRaw.stream()
+                .map(row -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("agentId", row[0] != null ? row[0].toString() : "");
+                    String prenom = row[1] != null ? row[1].toString() : "";
+                    String nom    = row[2] != null ? row[2].toString() : "";
+                    m.put("nom",   (prenom + " " + nom).trim());
+                    m.put("email", row[3] != null ? row[3].toString() : "");
+                    m.put("count", row[4]);
                     return m;
                 })
                 .collect(java.util.stream.Collectors.toList());
@@ -708,8 +753,10 @@ public class RecepissService {
         result.put("tauxRegen",       tauxRegen);
         result.put("totalCeMois",     totalCeMois);
         result.put("totalAujourdhui", totalAujourdhui);
+        result.put("delaiMoyenJours", delaiMoyenJours);
         result.put("volumesMois",     volumesMois);
         result.put("top5Entites",     top5Entites);
+        result.put("top5Agents",      top5Agents);
         return result;
     }
 

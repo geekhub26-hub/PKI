@@ -84,20 +84,19 @@ public class RecepissController {
             @RequestParam(required = false) String dateFin,
             @RequestParam(required = false) String statut,
             @RequestParam(required = false) String typeCertif,
-            @RequestParam(required = false) java.util.UUID entiteId) {
+            @RequestParam(required = false) java.util.UUID entiteId,
+            @RequestParam(required = false) String profilInitiateur) {
 
         User user = resolveUser(auth);
         java.util.UUID effectiveEntiteId = entiteId;
 
-        // Les rôles AEL sont cloisonnés à leur propre entité
         if (user.getRole() == User.UserRole.AEL || user.getRole() == User.UserRole.ADMIN_AEL) {
             effectiveEntiteId = user.getEntite() != null ? user.getEntite().getId() : null;
         }
 
-        java.time.LocalDate debut = parseDate(dateDebut);
-        java.time.LocalDate fin   = parseDate(dateFin);
-
-        return ResponseEntity.ok(recepissService.getStats(effectiveEntiteId, debut, fin, statut, typeCertif));
+        return ResponseEntity.ok(recepissService.getStats(
+                effectiveEntiteId, parseDate(dateDebut), parseDate(dateFin),
+                statut, typeCertif, profilInitiateur));
     }
 
     private static java.time.LocalDate parseDate(String s) {
@@ -112,7 +111,8 @@ public class RecepissController {
             @RequestParam(required = false) String dateFin,
             @RequestParam(required = false) String statut,
             @RequestParam(required = false) String typeCertif,
-            @RequestParam(required = false) java.util.UUID entiteId) {
+            @RequestParam(required = false) java.util.UUID entiteId,
+            @RequestParam(required = false) String profilInitiateur) {
 
         User user = resolveUser(auth);
         java.util.UUID effectiveEntiteId = entiteId;
@@ -120,7 +120,7 @@ public class RecepissController {
             effectiveEntiteId = user.getEntite() != null ? user.getEntite().getId() : null;
         }
         byte[] pdf = recepissService.exportStatsPdf(
-                effectiveEntiteId, parseDate(dateDebut), parseDate(dateFin), statut, typeCertif);
+                effectiveEntiteId, parseDate(dateDebut), parseDate(dateFin), statut, typeCertif, profilInitiateur);
         return ResponseEntity.ok()
                 .header("Content-Type", "application/pdf")
                 .header("Content-Disposition", "attachment; filename=\"stats-recepisses.pdf\"")

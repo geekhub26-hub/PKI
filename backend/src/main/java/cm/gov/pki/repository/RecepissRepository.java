@@ -43,4 +43,12 @@ public interface RecepissRepository extends JpaRepository<Recepisse, UUID> {
     // Top N entités pour une entité spécifique
     @Query("SELECT r.agent.entite.id, r.agent.entite.nom, COUNT(r) FROM Recepisse r WHERE r.agent IS NOT NULL AND r.agent.entite.id = :entiteId GROUP BY r.agent.entite.id, r.agent.entite.nom ORDER BY COUNT(r) DESC")
     List<Object[]> top5EntitesForEntite(@Param("entiteId") UUID entiteId);
+
+    // Top N agents AEL par volume (global)
+    @Query("SELECT r.agent.id, r.agent.firstName, r.agent.lastName, r.agent.email, COUNT(r) FROM Recepisse r WHERE r.agent IS NOT NULL GROUP BY r.agent.id, r.agent.firstName, r.agent.lastName, r.agent.email ORDER BY COUNT(r) DESC")
+    List<Object[]> top5AgentsGlobal(Pageable pageable);
+
+    // Top N agents AEL pour une entité
+    @Query("SELECT r.agent.id, r.agent.firstName, r.agent.lastName, r.agent.email, COUNT(r) FROM Recepisse r WHERE r.agent IS NOT NULL AND r.agent.entite.id = :entiteId GROUP BY r.agent.id, r.agent.firstName, r.agent.lastName, r.agent.email ORDER BY COUNT(r) DESC")
+    List<Object[]> top5AgentsForEntite(@Param("entiteId") UUID entiteId);
 }
