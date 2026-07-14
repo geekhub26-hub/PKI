@@ -17,7 +17,7 @@ export default function UserDownloadCrlPage() {
   }, []);
 
   function downloadCrl() {
-    const blob = new Blob([crlContent], { type: 'application/pkix-crl' });
+    const blob = new Blob([crlContent], { type: 'application/octet-stream' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = 'crl.pem';
