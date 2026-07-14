@@ -207,6 +207,7 @@ public class AuthService {
         LocalDateTime loginAt = LocalDateTime.now();
         updateLastLoginWithRetry(user.getId(), loginAt);
         user.setLastLogin(loginAt);
+        touchActivity(user.getId());  // réinitialise le timer d'inactivité dès le login
 
         // 2FA pour les rôles admin
         if (user.isAdmin()) {
@@ -275,6 +276,7 @@ public class AuthService {
         user.setTwoFaExpiresAt(null);
         LocalDateTime now = LocalDateTime.now();
         user.setLastLogin(now);
+        user.setLastActivityAt(now);   // réinitialise le timer d'inactivité au login
         userRepository.save(user);
         auditService.log(user, "USER_LOGIN", "User", user.getId(), Map.of("method", "2FA"));
         AuthDTO.JwtResponse jwt = new AuthDTO.JwtResponse();
