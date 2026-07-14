@@ -11,6 +11,7 @@ import cm.gov.pki.service.CAService;
 import cm.gov.pki.service.AuditService;
 import cm.gov.pki.service.EmailService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.security.core.Authentication;
@@ -70,6 +71,7 @@ public class AdminController {
 				.orElse(ResponseEntity.notFound().build());
 	}
 
+	@Transactional(readOnly = true)
 	@GetMapping("/stats")
 	public ResponseEntity<Map<String, Object>> stats(Authentication authentication) {
 		Map<String, Object> m = new HashMap<>();
@@ -89,6 +91,7 @@ public class AdminController {
 		return ResponseEntity.ok(m);
 	}
 
+	@Transactional(readOnly = true)
 	@GetMapping("/dashboard")
 	public ResponseEntity<Map<String, Object>> getDashboard(Authentication authentication) {
 		try {
@@ -293,6 +296,7 @@ public class AdminController {
 		}
 	}
 
+	@Transactional(readOnly = true)
 	@GetMapping("/certificates")
 	public ResponseEntity<?> listCertificates(
 			@RequestParam(value = "status", required = false) String status,
@@ -328,6 +332,7 @@ public class AdminController {
 		return ResponseEntity.ok(resp);
 	}
 
+	@Transactional(readOnly = true)
 	@GetMapping("/audit-logs")
 	public ResponseEntity<?> listAuditLogs(
 			@RequestParam(value = "action", required = false) String action,
@@ -367,6 +372,7 @@ public class AdminController {
 
 	// --- Certificate request management for admins ---
 
+	@Transactional(readOnly = true)
 	@GetMapping("/certificate-requests")
 	public ResponseEntity<?> listCertificateRequests(
 			Authentication authentication,
@@ -398,6 +404,7 @@ public class AdminController {
 		return ResponseEntity.ok(resp);
 	}
 
+	@Transactional(readOnly = true)
 	@GetMapping("/certificate-requests/{id}")
 	public ResponseEntity<?> getCertificateRequest(@PathVariable("id") java.util.UUID id) {
 		var opt = certificateRequestRepository.findById(id);
@@ -671,6 +678,7 @@ public class AdminController {
 
 	// ── Export Excel ──────────────────────────────────────────────────────────
 
+	@Transactional(readOnly = true)
 	@GetMapping("/certificate-requests/export/excel")
 	public ResponseEntity<?> exportRequestsExcel(Authentication authentication) {
 		try {
@@ -730,6 +738,7 @@ public class AdminController {
 
 	// ── Stats avancées ────────────────────────────────────────────────────────
 
+	@Transactional(readOnly = true)
 	@GetMapping("/stats/advanced")
 	public ResponseEntity<?> advancedStats(
 			Authentication authentication,
