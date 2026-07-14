@@ -241,21 +241,24 @@ public class AdminController {
 	@GetMapping("/crl")
 	public ResponseEntity<String> downloadCrl() {
 		var caOpt = caConfigurationRepository.findFirstByIsActiveTrueOrderByCreatedAtDesc();
-		if (caOpt.isEmpty()) return ResponseEntity.status(404).body("Aucune AC active configurée.");
+		if (caOpt.isEmpty()) {
+			return ResponseEntity.status(404).body("Aucune AC active configurée.");
+		}
 		CAConfiguration ca = caOpt.get();
 		try {
-			if (ca.caCrlPath == null) {
-				return ResponseEntity.ok(caService.generateCRL(ca));
+			if (ca.caCrlPath != null) {
+				java.nio.file.Path p = java.nio.file.Path.of(ca.caCrlPath);
+				if (java.nio.file.Files.exists(p)) {
+					return ResponseEntity.ok(java.nio.file.Files.readString(p));
+				}
 			}
-			java.nio.file.Path p = java.nio.file.Path.of(ca.caCrlPath);
-			if (!java.nio.file.Files.exists(p)) {
-				// Filesystem éphémère (Render) : régénérer la CRL
-				return ResponseEntity.ok(caService.generateCRL(ca));
-			}
-			return ResponseEntity.ok(java.nio.file.Files.readString(p));
+			// Fichier absent (filesystem éphémère) : tentative de régénération
+			return ResponseEntity.ok(caService.generateCRL(ca));
+		} catch (java.io.FileNotFoundException | java.nio.file.NoSuchFileException ex) {
+			return ResponseEntity.status(404).body("Keystore AC absent. Veuillez restaurer le keystore via l'interface d'administration.");
 		} catch (Exception ex) {
-			log.error("Erreur lecture CRL", ex);
-			return ResponseEntity.status(503).body("CRL temporairement indisponible.");
+			log.warn("CRL indisponible: {}", ex.getMessage());
+			return ResponseEntity.status(404).body("CRL temporairement indisponible. L'AC doit être réinitialisée.");
 		}
 	}
 
