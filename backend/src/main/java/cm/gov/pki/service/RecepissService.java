@@ -381,6 +381,7 @@ public class RecepissService {
 
     /** Export PDF du rapport statistiques avec filtres optionnels. */
     @SuppressWarnings("unchecked")
+    @Transactional(readOnly = true)
     public byte[] exportStatsPdf(UUID entiteId,
                                   java.time.LocalDate dateDebut,
                                   java.time.LocalDate dateFin,
@@ -610,11 +611,13 @@ public class RecepissService {
     }
 
     /** Stats sans filtre (compatibilité SuperAdminController). */
+    @Transactional(readOnly = true)
     public Map<String, Object> getStats() {
         return getStats(null, null, null, null, null, null);
     }
 
     /** Stats avec filtres optionnels + isolation par entité (5 params — backward compat). */
+    @Transactional(readOnly = true)
     public Map<String, Object> getStats(UUID entiteId,
                                         java.time.LocalDate dateDebut,
                                         java.time.LocalDate dateFin,
@@ -624,6 +627,7 @@ public class RecepissService {
     }
 
     /** Stats avec tous les filtres CDC : entité, dates, statut, type, profil initiateur. */
+    @Transactional(readOnly = true)
     public Map<String, Object> getStats(UUID entiteId,
                                         java.time.LocalDate dateDebut,
                                         java.time.LocalDate dateFin,
