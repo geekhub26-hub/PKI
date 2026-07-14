@@ -122,7 +122,7 @@ apiClient.interceptors.response.use(
 
       isRefreshing = true;
       try {
-        const resp = await axios.post(`${API_BASE_URL_CLEAN}/auth/refresh`, { refreshToken });
+        const resp = await axios.post<{ accessToken: string; refreshToken: string }>(`${API_BASE_URL_CLEAN}/auth/refresh`, { refreshToken });
         const { accessToken, refreshToken: newRefresh } = resp.data;
         localStorage.setItem('accessToken', accessToken);
         localStorage.setItem('refreshToken', newRefresh);
