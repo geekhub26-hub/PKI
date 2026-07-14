@@ -78,7 +78,7 @@ pki:
 
   # Session timeout par inactivité (en minutes)
   session:
-    timeout-minutes: ${PKI_SESSION_TIMEOUT_MINUTES:30}
+    timeout-minutes: ${PKI_SESSION_TIMEOUT_MINUTES:480}
 
   # Bootstrap du premier administrateur (laisser vide pour desactiver)
   bootstrap:

@@ -397,6 +397,7 @@ public class AuthService {
         }
 
         // Rotation : nouveau pair access + refresh (l'ancien hash est écrasé)
+        touchActivity(user.getId());
         String newAccessToken = generateAccessToken(user);
         String newRefreshToken = generateRefreshToken(user);
 
