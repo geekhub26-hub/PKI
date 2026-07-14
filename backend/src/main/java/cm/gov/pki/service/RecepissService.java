@@ -386,16 +386,53 @@ public class RecepissService {
         return v;
     }
 
+    /** Stats sans filtre (compatibilité SuperAdminController). */
     public Map<String, Object> getStats() {
-        List<Recepisse> all = recepissRepository.findAll();
+        return getStats(null, null, null, null, null);
+    }
+
+    /** Stats avec filtres optionnels + isolation par entité. */
+    public Map<String, Object> getStats(UUID entiteId,
+                                        java.time.LocalDate dateDebut,
+                                        java.time.LocalDate dateFin,
+                                        String statut,
+                                        String typeCertif) {
+        // 1. Charger selon l'entité (isolation AEL)
+        List<Recepisse> all = entiteId != null
+                ? new ArrayList<>(recepissRepository.findByAgentEntiteId(entiteId))
+                : new ArrayList<>(recepissRepository.findAll());
+
         LocalDateTime now = LocalDateTime.now();
 
-        // Actualise les statuts expirés en mémoire (sans transaction)
+        // 2. Actualise les statuts expirés en mémoire
         all.forEach(r -> {
             if ("VALIDE".equals(r.getStatut()) && r.getDateExpiration().isBefore(now)) {
                 r.setStatut("EXPIRE");
             }
         });
+
+        // 3. Filtres in-memory
+        if (dateDebut != null) {
+            all = all.stream()
+                    .filter(r -> !r.getDateGeneration().toLocalDate().isBefore(dateDebut))
+                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        }
+        if (dateFin != null) {
+            all = all.stream()
+                    .filter(r -> !r.getDateGeneration().toLocalDate().isAfter(dateFin))
+                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        }
+        if (statut != null && !statut.isBlank() && !"ALL".equals(statut)) {
+            all = all.stream()
+                    .filter(r -> statut.equals(r.getStatut()))
+                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        }
+        if (typeCertif != null && !typeCertif.isBlank()) {
+            String tc = typeCertif.toLowerCase();
+            all = all.stream()
+                    .filter(r -> r.getTypeCertificat() != null && r.getTypeCertificat().toLowerCase().contains(tc))
+                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        }
 
         long total = all.size();
 
@@ -406,8 +443,8 @@ public class RecepissService {
         parStatut.put("REMPLACE", 0L);
         all.forEach(r -> parStatut.merge(r.getStatut(), 1L, Long::sum));
 
-        long remplace  = parStatut.get("REMPLACE");
-        long expire    = parStatut.get("EXPIRE");
+        long remplace = parStatut.get("REMPLACE");
+        long expire   = parStatut.get("EXPIRE");
         double tauxRegen = (remplace + expire) > 0
                 ? Math.round(remplace * 1000.0 / (remplace + expire)) / 10.0
                 : 0.0;
@@ -429,6 +466,20 @@ public class RecepissService {
             volumesMois.add(Map.of("mois", m.toString(), "count", count));
         }
 
+        // 4. Top 5 entités par volume (requête DB directe, indépendante des filtres date/statut/type)
+        List<Object[]> top5Raw = entiteId != null
+                ? recepissRepository.top5EntitesForEntite(entiteId)
+                : recepissRepository.top5EntitesGlobal(org.springframework.data.domain.PageRequest.of(0, 5));
+        List<Map<String, Object>> top5Entites = top5Raw.stream()
+                .map(row -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("entiteId", row[0] != null ? row[0].toString() : "");
+                    m.put("nom",      row[1] != null ? row[1].toString() : "");
+                    m.put("count",    row[2]);
+                    return m;
+                })
+                .collect(java.util.stream.Collectors.toList());
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("total",           total);
         result.put("parStatut",       parStatut);
@@ -436,6 +487,7 @@ public class RecepissService {
         result.put("totalCeMois",     totalCeMois);
         result.put("totalAujourdhui", totalAujourdhui);
         result.put("volumesMois",     volumesMois);
+        result.put("top5Entites",     top5Entites);
         return result;
     }
 

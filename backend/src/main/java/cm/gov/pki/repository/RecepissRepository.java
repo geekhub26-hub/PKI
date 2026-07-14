@@ -1,8 +1,10 @@
 package cm.gov.pki.repository;
 
 import cm.gov.pki.entity.Recepisse;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -29,4 +31,16 @@ public interface RecepissRepository extends JpaRepository<Recepisse, UUID> {
 
     @Query("SELECT r FROM Recepisse r WHERE r.statut = 'VALIDE' AND r.dateExpiration >= :debut AND r.dateExpiration < :fin")
     List<Recepisse> findExpiringBetween(LocalDateTime debut, LocalDateTime fin);
+
+    // Tous les récépissés dont l'agent appartient à une entité donnée
+    @Query("SELECT r FROM Recepisse r WHERE r.agent IS NOT NULL AND r.agent.entite.id = :entiteId ORDER BY r.dateGeneration DESC")
+    List<Recepisse> findByAgentEntiteId(@Param("entiteId") UUID entiteId);
+
+    // Top N entités par volume (global)
+    @Query("SELECT r.agent.entite.id, r.agent.entite.nom, COUNT(r) FROM Recepisse r WHERE r.agent IS NOT NULL AND r.agent.entite IS NOT NULL GROUP BY r.agent.entite.id, r.agent.entite.nom ORDER BY COUNT(r) DESC")
+    List<Object[]> top5EntitesGlobal(Pageable pageable);
+
+    // Top N entités pour une entité spécifique
+    @Query("SELECT r.agent.entite.id, r.agent.entite.nom, COUNT(r) FROM Recepisse r WHERE r.agent IS NOT NULL AND r.agent.entite.id = :entiteId GROUP BY r.agent.entite.id, r.agent.entite.nom ORDER BY COUNT(r) DESC")
+    List<Object[]> top5EntitesForEntite(@Param("entiteId") UUID entiteId);
 }

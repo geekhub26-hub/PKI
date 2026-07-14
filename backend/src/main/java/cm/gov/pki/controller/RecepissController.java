@@ -78,8 +78,31 @@ public class RecepissController {
     }
 
     @GetMapping("/admin/recepisses/stats")
-    public ResponseEntity<Map<String, Object>> stats() {
-        return ResponseEntity.ok(recepissService.getStats());
+    public ResponseEntity<Map<String, Object>> stats(
+            Authentication auth,
+            @RequestParam(required = false) String dateDebut,
+            @RequestParam(required = false) String dateFin,
+            @RequestParam(required = false) String statut,
+            @RequestParam(required = false) String typeCertif,
+            @RequestParam(required = false) java.util.UUID entiteId) {
+
+        User user = resolveUser(auth);
+        java.util.UUID effectiveEntiteId = entiteId;
+
+        // Les rôles AEL sont cloisonnés à leur propre entité
+        if (user.getRole() == User.UserRole.AEL || user.getRole() == User.UserRole.ADMIN_AEL) {
+            effectiveEntiteId = user.getEntite() != null ? user.getEntite().getId() : null;
+        }
+
+        java.time.LocalDate debut = parseDate(dateDebut);
+        java.time.LocalDate fin   = parseDate(dateFin);
+
+        return ResponseEntity.ok(recepissService.getStats(effectiveEntiteId, debut, fin, statut, typeCertif));
+    }
+
+    private static java.time.LocalDate parseDate(String s) {
+        if (s == null || s.isBlank()) return null;
+        try { return java.time.LocalDate.parse(s); } catch (Exception e) { return null; }
     }
 
     @GetMapping("/admin/recepisses/export")
