@@ -379,6 +379,228 @@ public class RecepissService {
         }
     }
 
+    /** Export PDF du rapport statistiques avec filtres optionnels. */
+    @SuppressWarnings("unchecked")
+    public byte[] exportStatsPdf(UUID entiteId,
+                                  java.time.LocalDate dateDebut,
+                                  java.time.LocalDate dateFin,
+                                  String statut,
+                                  String typeCertif) {
+        Map<String, Object> s = getStats(entiteId, dateDebut, dateFin, statut, typeCertif);
+        Map<String, Long> parStatut = (Map<String, Long>) s.get("parStatut");
+        List<Map<String, Object>> volumesMois   = (List<Map<String, Object>>) s.get("volumesMois");
+        List<Map<String, Object>> top5Entites   = (List<Map<String, Object>>) s.get("top5Entites");
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try {
+            Document doc = new Document(PageSize.A4, 50, 50, 60, 60);
+            PdfWriter.getInstance(doc, out);
+            doc.open();
+
+            // ── Palette ──
+            Color bleu  = new Color(0, 90, 160);
+            Color gris  = new Color(100, 100, 100);
+            Color fond  = new Color(245, 247, 250);
+            Color ligne = new Color(220, 220, 220);
+
+            Font titreFont  = new Font(Font.HELVETICA, 15, Font.BOLD,   bleu);
+            Font sectionFont= new Font(Font.HELVETICA, 11, Font.BOLD,   bleu);
+            Font labelFont  = new Font(Font.HELVETICA,  9, Font.BOLD,   gris);
+            Font valueFont  = new Font(Font.HELVETICA,  9, Font.NORMAL, Color.BLACK);
+            Font footerFont = new Font(Font.HELVETICA,  8, Font.ITALIC, Color.GRAY);
+
+            // ── En-tête ──
+            PdfPTable header = new PdfPTable(2);
+            header.setWidthPercentage(100);
+            header.setWidths(new float[]{1.5f, 4f});
+            header.setSpacingAfter(10);
+
+            PdfPCell logoCell = new PdfPCell();
+            logoCell.setBorder(Rectangle.NO_BORDER);
+            try {
+                byte[] logoBytes = loadLogoBytes();
+                if (logoBytes != null) {
+                    Image logo = Image.getInstance(logoBytes);
+                    logo.scaleToFit(70, 70);
+                    logoCell.addElement(logo);
+                }
+            } catch (Exception ignored) {}
+            header.addCell(logoCell);
+
+            PdfPCell titreCell = new PdfPCell();
+            titreCell.setBorder(Rectangle.NO_BORDER);
+            titreCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+            titreCell.setPaddingLeft(10);
+            titreCell.addElement(new Paragraph("AGENCE NATIONALE DES TECHNOLOGIES", new Font(Font.HELVETICA, 12, Font.BOLD, bleu)));
+            titreCell.addElement(new Paragraph("DE L'INFORMATION ET DE LA COMMUNICATION", new Font(Font.HELVETICA, 12, Font.BOLD, bleu)));
+            header.addCell(titreCell);
+            doc.add(header);
+
+            doc.add(new Chunk(new LineSeparator(1, 100, bleu, Element.ALIGN_CENTER, -2)));
+            doc.add(Chunk.NEWLINE);
+
+            Paragraph titre = new Paragraph("RAPPORT STATISTIQUES — RÉCÉPISSÉS", titreFont);
+            titre.setAlignment(Element.ALIGN_CENTER);
+            titre.setSpacingAfter(4);
+            doc.add(titre);
+
+            // Sous-titre : date + filtres appliqués
+            StringBuilder subtitle = new StringBuilder("Généré le ");
+            subtitle.append(LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
+            java.util.List<String> filtresAppliques = new java.util.ArrayList<>();
+            if (dateDebut != null) filtresAppliques.add("Du " + dateDebut.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+            if (dateFin   != null) filtresAppliques.add("Au " + dateFin.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+            if (statut != null && !statut.isBlank() && !"ALL".equals(statut)) filtresAppliques.add("Statut : " + statut);
+            if (typeCertif != null && !typeCertif.isBlank()) filtresAppliques.add("Type : " + typeCertif);
+            if (!filtresAppliques.isEmpty()) subtitle.append(" | Filtres : ").append(String.join(", ", filtresAppliques));
+
+            Paragraph sub = new Paragraph(subtitle.toString(), footerFont);
+            sub.setAlignment(Element.ALIGN_CENTER);
+            sub.setSpacingAfter(16);
+            doc.add(sub);
+
+            // ── Section 1 : KPIs ──
+            Paragraph kpiTitle = new Paragraph("1. Indicateurs clés", sectionFont);
+            kpiTitle.setSpacingAfter(6);
+            doc.add(kpiTitle);
+
+            PdfPTable kpiTable = new PdfPTable(2);
+            kpiTable.setWidthPercentage(100);
+            kpiTable.setWidths(new float[]{3f, 2f});
+            kpiTable.setSpacingAfter(14);
+
+            addStatsRow(kpiTable, "Total récépissés",  String.valueOf(s.get("total")),   labelFont, valueFont, fond, ligne);
+            addStatsRow(kpiTable, "Valides",   safeStr(parStatut, "VALIDE"),  labelFont, valueFont, Color.WHITE, ligne);
+            addStatsRow(kpiTable, "Expirés",   safeStr(parStatut, "EXPIRE"),  labelFont, valueFont, fond, ligne);
+            addStatsRow(kpiTable, "Annulés",   safeStr(parStatut, "ANNULE"),  labelFont, valueFont, Color.WHITE, ligne);
+            addStatsRow(kpiTable, "Remplacés", safeStr(parStatut, "REMPLACE"),labelFont, valueFont, fond, ligne);
+            addStatsRow(kpiTable, "Ce mois-ci", String.valueOf(s.get("totalCeMois")), labelFont, valueFont, Color.WHITE, ligne);
+            addStatsRow(kpiTable, "Aujourd'hui", String.valueOf(s.get("totalAujourdhui")), labelFont, valueFont, fond, ligne);
+            addStatsRow(kpiTable, "Taux de régénération", s.get("tauxRegen") + "%", labelFont, valueFont, Color.WHITE, ligne);
+            doc.add(kpiTable);
+
+            // ── Section 2 : Volume mensuel ──
+            Paragraph volTitle = new Paragraph("2. Volume mensuel (6 derniers mois)", sectionFont);
+            volTitle.setSpacingAfter(6);
+            doc.add(volTitle);
+
+            PdfPTable volTable = new PdfPTable(2);
+            volTable.setWidthPercentage(60);
+            volTable.setHorizontalAlignment(Element.ALIGN_LEFT);
+            volTable.setWidths(new float[]{2f, 1f});
+            volTable.setSpacingAfter(14);
+
+            // En-tête
+            PdfPCell hMois = new PdfPCell(new Phrase("Mois", labelFont));
+            hMois.setBackgroundColor(bleu); hMois.setPadding(6); hMois.setBorderColor(ligne);
+            hMois.setHorizontalAlignment(Element.ALIGN_LEFT);
+            PdfPCell hVol  = new PdfPCell(new Phrase("Volume", labelFont));
+            hVol.setBackgroundColor(bleu);  hVol.setPadding(6);  hVol.setBorderColor(ligne);
+            hVol.setHorizontalAlignment(Element.ALIGN_RIGHT);
+            // Fix font color for header
+            Font whiteLabel = new Font(Font.HELVETICA, 9, Font.BOLD, Color.WHITE);
+            hMois = new PdfPCell(new Phrase("Mois",   whiteLabel)); hMois.setBackgroundColor(bleu); hMois.setPadding(6); hMois.setBorderColor(ligne);
+            hVol  = new PdfPCell(new Phrase("Volume", whiteLabel)); hVol.setBackgroundColor(bleu);  hVol.setPadding(6);  hVol.setBorderColor(ligne); hVol.setHorizontalAlignment(Element.ALIGN_RIGHT);
+            volTable.addCell(hMois); volTable.addCell(hVol);
+
+            boolean alternate = false;
+            for (Map<String, Object> v : volumesMois) {
+                String moisStr = String.valueOf(v.get("mois"));
+                long cnt = v.get("count") instanceof Number ? ((Number) v.get("count")).longValue() : 0L;
+                // Format YYYY-MM → nom du mois
+                String[] parts = moisStr.split("-");
+                String moisLabel = moisStr;
+                if (parts.length == 2) {
+                    try {
+                        java.time.YearMonth ym = java.time.YearMonth.parse(moisStr);
+                        moisLabel = ym.getMonth().getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.FRENCH)
+                                + " " + ym.getYear();
+                        moisLabel = Character.toUpperCase(moisLabel.charAt(0)) + moisLabel.substring(1);
+                    } catch (Exception ignored) {}
+                }
+                Color bg = alternate ? fond : Color.WHITE;
+                alternate = !alternate;
+                PdfPCell cMois = new PdfPCell(new Phrase(moisLabel, valueFont));
+                cMois.setBackgroundColor(bg); cMois.setPadding(5); cMois.setBorderColor(ligne);
+                PdfPCell cCnt  = new PdfPCell(new Phrase(String.valueOf(cnt), valueFont));
+                cCnt.setBackgroundColor(bg);  cCnt.setPadding(5);  cCnt.setBorderColor(ligne); cCnt.setHorizontalAlignment(Element.ALIGN_RIGHT);
+                volTable.addCell(cMois); volTable.addCell(cCnt);
+            }
+            doc.add(volTable);
+
+            // ── Section 3 : Top 5 Entités ──
+            Paragraph topTitle = new Paragraph("3. Top entités par volume", sectionFont);
+            topTitle.setSpacingAfter(6);
+            doc.add(topTitle);
+
+            if (top5Entites.isEmpty()) {
+                Paragraph noData = new Paragraph("Aucune donnée d'entité disponible.", valueFont);
+                noData.setSpacingAfter(14);
+                doc.add(noData);
+            } else {
+                PdfPTable topTable = new PdfPTable(3);
+                topTable.setWidthPercentage(80);
+                topTable.setHorizontalAlignment(Element.ALIGN_LEFT);
+                topTable.setWidths(new float[]{0.5f, 3f, 1f});
+                topTable.setSpacingAfter(14);
+
+                PdfPCell[] heads = {
+                    new PdfPCell(new Phrase("#",      whiteLabel)),
+                    new PdfPCell(new Phrase("Entité", whiteLabel)),
+                    new PdfPCell(new Phrase("Volume", whiteLabel)),
+                };
+                for (PdfPCell h : heads) {
+                    h.setBackgroundColor(bleu); h.setPadding(6); h.setBorderColor(ligne);
+                }
+                heads[2].setHorizontalAlignment(Element.ALIGN_RIGHT);
+                for (PdfPCell h : heads) topTable.addCell(h);
+
+                alternate = false;
+                int rank = 1;
+                for (Map<String, Object> ent : top5Entites) {
+                    Color bg = alternate ? fond : Color.WHITE;
+                    alternate = !alternate;
+                    PdfPCell cRank = new PdfPCell(new Phrase(String.valueOf(rank++), valueFont));
+                    cRank.setBackgroundColor(bg); cRank.setPadding(5); cRank.setBorderColor(ligne);
+                    PdfPCell cNom  = new PdfPCell(new Phrase(String.valueOf(ent.get("nom")), valueFont));
+                    cNom.setBackgroundColor(bg);  cNom.setPadding(5);  cNom.setBorderColor(ligne);
+                    PdfPCell cCnt  = new PdfPCell(new Phrase(String.valueOf(ent.get("count")), valueFont));
+                    cCnt.setBackgroundColor(bg);  cCnt.setPadding(5);  cCnt.setBorderColor(ligne); cCnt.setHorizontalAlignment(Element.ALIGN_RIGHT);
+                    topTable.addCell(cRank); topTable.addCell(cNom); topTable.addCell(cCnt);
+                }
+                doc.add(topTable);
+            }
+
+            // ── Pied de page ──
+            doc.add(new Chunk(new LineSeparator(0.5f, 100, new Color(180, 180, 180), Element.ALIGN_CENTER, -2)));
+            Paragraph footer = new Paragraph(
+                "Document généré automatiquement par le système PKI Souverain / ANTIC Cameroun. Confidentiel.", footerFont);
+            footer.setAlignment(Element.ALIGN_CENTER);
+            footer.setSpacingBefore(6);
+            doc.add(footer);
+
+            doc.close();
+        } catch (DocumentException e) {
+            throw new RuntimeException("Erreur génération PDF stats", e);
+        }
+        return out.toByteArray();
+    }
+
+    private void addStatsRow(PdfPTable table, String label, String value,
+                              Font lf, Font vf, Color bg, Color border) {
+        PdfPCell l = new PdfPCell(new Phrase(label, lf));
+        l.setBackgroundColor(bg); l.setPadding(6); l.setBorderColor(border);
+        PdfPCell v = new PdfPCell(new Phrase(value != null ? value : "—", vf));
+        v.setBackgroundColor(bg); v.setPadding(6); v.setBorderColor(border);
+        v.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        table.addCell(l); table.addCell(v);
+    }
+
+    private static String safeStr(Map<String, Long> map, String key) {
+        Long val = map != null ? map.get(key) : null;
+        return val != null ? String.valueOf(val) : "0";
+    }
+
     private static String csv(String v) {
         if (v == null) return "";
         if (v.contains(",") || v.contains("\"") || v.contains("\n"))

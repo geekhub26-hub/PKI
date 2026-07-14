@@ -105,6 +105,28 @@ public class RecepissController {
         try { return java.time.LocalDate.parse(s); } catch (Exception e) { return null; }
     }
 
+    @GetMapping("/admin/recepisses/stats/export/pdf")
+    public ResponseEntity<byte[]> exportStatsPdf(
+            Authentication auth,
+            @RequestParam(required = false) String dateDebut,
+            @RequestParam(required = false) String dateFin,
+            @RequestParam(required = false) String statut,
+            @RequestParam(required = false) String typeCertif,
+            @RequestParam(required = false) java.util.UUID entiteId) {
+
+        User user = resolveUser(auth);
+        java.util.UUID effectiveEntiteId = entiteId;
+        if (user.getRole() == User.UserRole.AEL || user.getRole() == User.UserRole.ADMIN_AEL) {
+            effectiveEntiteId = user.getEntite() != null ? user.getEntite().getId() : null;
+        }
+        byte[] pdf = recepissService.exportStatsPdf(
+                effectiveEntiteId, parseDate(dateDebut), parseDate(dateFin), statut, typeCertif);
+        return ResponseEntity.ok()
+                .header("Content-Type", "application/pdf")
+                .header("Content-Disposition", "attachment; filename=\"stats-recepisses.pdf\"")
+                .body(pdf);
+    }
+
     @GetMapping("/admin/recepisses/export")
     public ResponseEntity<byte[]> exportCsv() {
         byte[] csv = recepissService.exportCsv();
