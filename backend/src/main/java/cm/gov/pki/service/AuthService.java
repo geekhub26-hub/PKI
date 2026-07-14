@@ -397,7 +397,9 @@ public class AuthService {
         }
 
         // Rotation : nouveau pair access + refresh (l'ancien hash est écrasé)
-        touchActivity(user.getId());
+        // Mettre à jour lastActivityAt sur l'entité AVANT le save de generateRefreshToken,
+        // sinon le save écraserait la valeur mise à jour par touchActivity (problème cache JPA).
+        user.setLastActivityAt(LocalDateTime.now());
         String newAccessToken = generateAccessToken(user);
         String newRefreshToken = generateRefreshToken(user);
 
