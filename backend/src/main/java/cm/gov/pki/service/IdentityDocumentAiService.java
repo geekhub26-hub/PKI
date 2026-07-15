@@ -64,18 +64,16 @@ public class IdentityDocumentAiService {
         try {
             String providerValue = provider == null ? "heuristic" : provider.trim().toLowerCase(Locale.ROOT);
             if ("local".equals(providerValue)) {
-                ValidationResult local = validateWithLocalService(file, expected);
-                if (!local.accepted && !strictMode) {
-                    return new ValidationResult(true, local.confidence, "Validation IA faible (mode souple): " + local.message);
-                }
-                return local;
+                // Quand le service IA est actif, on respecte sa décision sans soft-mode bypass.
+                // Le soft mode ne s'applique que si le service est INDISPONIBLE (exception ci-dessous).
+                return validateWithLocalService(file, expected);
             }
 
             String text = extractText(file);
             ValidationResult classified = classify(file, text, expected);
-
-            if (!classified.accepted && !strictMode) {
-                // Mode souple: ne bloque pas l'utilisateur, mais garde la trace de confiance faible.
+            // Heuristique sans service IA : soft mode uniquement si au moins un indice (confidence > 0).
+            // Confidence = 0 signifie aucun signe de document → on bloque même en soft mode.
+            if (!classified.accepted && !strictMode && classified.confidence > 0.0) {
                 return new ValidationResult(true, classified.confidence, "Validation IA faible (mode souple): " + classified.message);
             }
             return classified;
@@ -84,6 +82,7 @@ public class IdentityDocumentAiService {
             if (strictMode) {
                 return new ValidationResult(false, 0.0, "Analyse IA impossible en mode strict");
             }
+            // Service IA indisponible : mode souple (ne bloque pas l'usager)
             return new ValidationResult(true, 0.0, "Analyse IA indisponible (mode souple)");
         }
     }
