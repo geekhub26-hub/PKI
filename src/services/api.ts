@@ -472,6 +472,19 @@ export const userService = {
   },
 };
 
+export const paymentService = {
+  /**
+   * Crée une session de paiement SharePay pour une demande approuvée.
+   * Retourne l'URL de paiement vers laquelle rediriger l'utilisateur.
+   */
+  createCheckout: async (requestId: string): Promise<{ paymentUrl: string; reference: string }> => {
+    const response = await apiClient.post<{ paymentUrl: string; reference: string }>(
+      `/payment/checkout/${requestId}`
+    );
+    return response.data;
+  },
+};
+
 export const adminService = {
   /**
    * Récupérer le dashboard admin
