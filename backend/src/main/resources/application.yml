@@ -112,6 +112,14 @@ pki:
     validity-years: 10
     key-size: 4096
     algorithm: RSA
+  # Paiement SharePay (Mobile Money)
+  payment:
+    amount: ${PKI_PAYMENT_AMOUNT:5000}
+    currency: ${PKI_PAYMENT_CURRENCY:XAF}
+    sharepay:
+      api-key: ${SHAREPAY_API_KEY:}
+      webhook-secret: ${SHAREPAY_WEBHOOK_SECRET:}
+
   # Validation IA des pieces d'identite
   identity-ai:
     provider: ${PKI_ID_AI_PROVIDER:heuristic}      # heuristic | google | local

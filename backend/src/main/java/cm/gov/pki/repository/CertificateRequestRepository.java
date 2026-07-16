@@ -12,6 +12,7 @@ import java.util.UUID;
 @Repository
 public interface CertificateRequestRepository extends JpaRepository<CertificateRequest, UUID> {
     List<CertificateRequest> findByUserOrderBySubmittedAtDesc(User user);
+    Optional<CertificateRequest> findBySharePayReference(String sharePayReference);
     Optional<CertificateRequest> findByIdAndUser(UUID id, User user);
     long countByStatus(String status);
     long countByStatusIn(java.util.Collection<String> statuses);

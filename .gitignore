@@ -2,6 +2,8 @@
 /frontend-web/node_modules/
 /frontend-web/dist/
 /frontend-web/target/
+/PKI-web/node_modules/
+/PKI-web/dist/
 
 # ... (tes anciennes règles) ...
 

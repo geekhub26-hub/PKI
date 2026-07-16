@@ -409,8 +409,9 @@ public class UserController {
         if (opt.isEmpty()) return ResponseEntity.status(404).build();
         CertificateRequest req = opt.get();
 
-        if (!"REVIEW_APPROVED".equalsIgnoreCase(req.getStatus())) {
-            return ResponseEntity.status(400).body(Map.of("error", "Admin verification not approved yet"));
+        String reqStatus = req.getStatus() == null ? "" : req.getStatus().toUpperCase();
+        if (!"PAYMENT_CONFIRMED".equals(reqStatus)) {
+            return ResponseEntity.status(400).body(Map.of("error", "Payment confirmation required before CSR submission"));
         }
 
         String csrContent;
@@ -450,8 +451,9 @@ public class UserController {
         if (opt.isEmpty()) return ResponseEntity.status(404).build();
         CertificateRequest req = opt.get();
 
-        if (!"REVIEW_APPROVED".equalsIgnoreCase(req.getStatus())) {
-            return ResponseEntity.status(400).body(Map.of("error", "Admin verification not approved yet"));
+        String reqStatus2 = req.getStatus() == null ? "" : req.getStatus().toUpperCase();
+        if (!"PAYMENT_CONFIRMED".equals(reqStatus2)) {
+            return ResponseEntity.status(400).body(Map.of("error", "Payment confirmation required before CSR submission"));
         }
 
         String resolvedCn = (cn == null || cn.isBlank()) ? req.getCommonName() : cn.trim();

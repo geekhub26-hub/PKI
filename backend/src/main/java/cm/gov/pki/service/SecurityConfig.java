@@ -58,6 +58,7 @@ public class SecurityConfig {
                                 "/auth/**",
                                 "/public/**",
                                 "/api/public/**",
+                                "/webhook/**",
                                 "/actuator/health",
                                 "/actuator/health/**",
                                 "/actuator/info",

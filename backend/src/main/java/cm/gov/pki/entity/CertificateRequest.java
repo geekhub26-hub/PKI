@@ -114,6 +114,13 @@ public class CertificateRequest {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Column(name = "sharepay_reference", length = 255)
+    private String sharePayReference;
+
+    @Column(name = "payment_initiated_at")
+    private LocalDateTime paymentInitiatedAt;
+
     // --- Constructeurs ---
     public CertificateRequest() {
         // Constructeur sans argument
@@ -239,6 +246,12 @@ public class CertificateRequest {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public String getSharePayReference() { return sharePayReference; }
+    public void setSharePayReference(String sharePayReference) { this.sharePayReference = sharePayReference; }
+
+    public LocalDateTime getPaymentInitiatedAt() { return paymentInitiatedAt; }
+    public void setPaymentInitiatedAt(LocalDateTime paymentInitiatedAt) { this.paymentInitiatedAt = paymentInitiatedAt; }
 
     // --- Builder manuel (optionnel) ---
     public static Builder builder() { return new Builder(); }
