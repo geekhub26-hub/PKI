@@ -4,6 +4,7 @@ import cm.gov.pki.entity.AuditLog;
 import cm.gov.pki.entity.CertificateRequest;
 import cm.gov.pki.entity.User;
 import cm.gov.pki.repository.CertificateRequestRepository;
+import cm.gov.pki.repository.ParametreRepository;
 import cm.gov.pki.service.AuditService;
 import cm.gov.pki.service.EmailService;
 import cm.gov.pki.service.SharePayService;
@@ -18,9 +19,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 public class PaymentController {
@@ -31,6 +31,7 @@ public class PaymentController {
     private final CertificateRequestRepository requestRepository;
     private final AuditService auditService;
     private final EmailService emailService;
+    private final ParametreRepository parametreRepository;
 
     @Value("${pki.frontend.url:http://localhost:5173}")
     private String frontendUrl;
@@ -41,12 +42,14 @@ public class PaymentController {
             SharePayService sharePayService,
             CertificateRequestRepository requestRepository,
             AuditService auditService,
-            EmailService emailService
+            EmailService emailService,
+            ParametreRepository parametreRepository
     ) {
         this.sharePayService = sharePayService;
         this.requestRepository = requestRepository;
         this.auditService = auditService;
         this.emailService = emailService;
+        this.parametreRepository = parametreRepository;
     }
 
     /**
@@ -293,5 +296,52 @@ public class PaymentController {
         }
 
         return ResponseEntity.ok(Map.of("status", "PAYMENT_CONFIRMED", "message", "Paiement confirmé manuellement."));
+    }
+
+    /**
+     * Liste tous les paiements (demandes ayant initié ou confirmé un paiement).
+     * Accessible aux admins — protégé par /admin/** dans SecurityConfig.
+     */
+    @GetMapping("/admin/payments")
+    public ResponseEntity<?> listPayments() {
+        try {
+            String amount = parametreRepository.findById("payment_amount")
+                    .map(p -> p.getValeur())
+                    .orElse("5000");
+
+            List<Map<String, Object>> result = requestRepository.findAll().stream()
+                    .filter(r -> r.getSharePayReference() != null
+                            || "AWAITING_PAYMENT".equalsIgnoreCase(r.getStatus())
+                            || "PAYMENT_CONFIRMED".equalsIgnoreCase(r.getStatus()))
+                    .sorted(Comparator.comparing(
+                            r -> r.getPaymentInitiatedAt() != null ? r.getPaymentInitiatedAt() : r.getCreatedAt(),
+                            Comparator.nullsLast(Comparator.reverseOrder())))
+                    .map(req -> {
+                        LinkedHashMap<String, Object> m = new LinkedHashMap<>();
+                        m.put("requestId", req.getId().toString());
+                        m.put("status", req.getStatus() != null ? req.getStatus() : "");
+                        m.put("sharePayReference", req.getSharePayReference() != null ? req.getSharePayReference() : "");
+                        m.put("paymentInitiatedAt", req.getPaymentInitiatedAt() != null ? req.getPaymentInitiatedAt().toString() : "");
+                        m.put("amount", amount);
+                        m.put("commonName", req.getCommonName() != null ? req.getCommonName() : "");
+                        User u = req.getUser();
+                        if (u != null) {
+                            m.put("userId", u.getId().toString());
+                            m.put("userName", ((u.getFirstName() != null ? u.getFirstName() : "") + " " + (u.getLastName() != null ? u.getLastName() : "")).trim());
+                            m.put("userEmail", u.getEmail() != null ? u.getEmail() : "");
+                        } else {
+                            m.put("userId", "");
+                            m.put("userName", ((req.getFirstName() != null ? req.getFirstName() : "") + " " + (req.getLastName() != null ? req.getLastName() : "")).trim());
+                            m.put("userEmail", req.getEmail() != null ? req.getEmail() : "");
+                        }
+                        return (Map<String, Object>) m;
+                    })
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Erreur chargement liste paiements: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("error", "Erreur lors du chargement des paiements."));
+        }
     }
 }
