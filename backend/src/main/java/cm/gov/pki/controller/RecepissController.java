@@ -226,9 +226,10 @@ public class RecepissController {
     // ─────────────────────────────────────────────
 
     private User resolveUser(Authentication auth) {
-        String email = auth.getName();
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalStateException("Utilisateur introuvable"));
+        if (auth != null && auth.getPrincipal() instanceof User user) {
+            return user;
+        }
+        throw new IllegalStateException("Utilisateur non authentifié");
     }
 
     private Map<String, Object> toDto(Recepisse r) {
