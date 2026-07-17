@@ -18,6 +18,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.transaction.annotation.Transactional;
+
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -301,7 +303,9 @@ public class PaymentController {
     /**
      * Liste tous les paiements (demandes ayant initié ou confirmé un paiement).
      * Accessible aux admins — protégé par /admin/** dans SecurityConfig.
+     * @Transactional requis : User est LAZY sur CertificateRequest.
      */
+    @Transactional(readOnly = true)
     @GetMapping("/admin/payments")
     public ResponseEntity<?> listPayments() {
         try {
