@@ -210,4 +210,88 @@ public class PaymentController {
             }
         }
     }
+
+    /**
+     * Vérifie le statut du paiement SharePay et confirme si SUCCESS.
+     * Appelé par l'utilisateur depuis l'interface de suivi.
+     */
+    @PostMapping("/payment/verify/{requestId}")
+    public ResponseEntity<?> verifyPayment(
+            Authentication authentication,
+            @PathVariable("requestId") UUID requestId
+    ) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof User user)) {
+            return ResponseEntity.status(401).build();
+        }
+        Optional<CertificateRequest> opt = requestRepository.findByIdAndUser(requestId, user);
+        if (opt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("error", "Demande introuvable."));
+        }
+        CertificateRequest req = opt.get();
+        if (!"AWAITING_PAYMENT".equalsIgnoreCase(req.getStatus())) {
+            return ResponseEntity.ok(Map.of("status", req.getStatus(), "message", "Statut actuel : " + req.getStatus()));
+        }
+
+        String reference = req.getSharePayReference();
+        if (reference == null || reference.isBlank()) {
+            return ResponseEntity.status(400).body(Map.of("error", "Aucune référence de paiement associée à cette demande."));
+        }
+
+        String payStatus = sharePayService.getPayInStatus(reference);
+        log.info("Vérification paiement demande {} (ref={}): SharePay status={}", requestId, reference, payStatus);
+
+        return switch (payStatus.toUpperCase()) {
+            case "SUCCESS" -> {
+                handlePaymentSuccess(req, reference);
+                yield ResponseEntity.ok(Map.of("status", "PAYMENT_CONFIRMED", "message", "Paiement confirmé."));
+            }
+            case "FAILED", "CANCELLED" -> {
+                handlePaymentFailed(req, "payment." + payStatus.toLowerCase());
+                yield ResponseEntity.ok(Map.of("status", "REVIEW_APPROVED", "message", "Paiement échoué — vous pouvez réessayer."));
+            }
+            default -> ResponseEntity.ok(Map.of("status", "AWAITING_PAYMENT", "message", "Paiement en attente chez SharePay (statut: " + payStatus + ")."));
+        };
+    }
+
+    /**
+     * Confirmation manuelle du paiement par un administrateur.
+     * Accessible via /admin/** donc protégé par le rôle admin dans SecurityConfig.
+     */
+    @PostMapping("/admin/payment/confirm/{requestId}")
+    public ResponseEntity<?> adminConfirmPayment(
+            Authentication authentication,
+            @PathVariable("requestId") UUID requestId
+    ) {
+        Optional<CertificateRequest> opt = requestRepository.findById(requestId);
+        if (opt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("error", "Demande introuvable."));
+        }
+        CertificateRequest req = opt.get();
+        if (!"AWAITING_PAYMENT".equalsIgnoreCase(req.getStatus())) {
+            return ResponseEntity.status(400).body(Map.of(
+                    "error", "Cette demande n'est pas en attente de paiement (statut : " + req.getStatus() + ")."));
+        }
+
+        req.setStatus("PAYMENT_CONFIRMED");
+        requestRepository.save(req);
+
+        String adminEmail = authentication != null ? authentication.getName() : "admin";
+        log.info("Paiement confirmé manuellement par {} pour demande {}", adminEmail, requestId);
+
+        User user = req.getUser();
+        if (user != null) {
+            auditService.log(user, AuditLog.Actions.REQUEST_UPDATED, "CertificateRequest", requestId,
+                    Map.of("action", "payment_confirmed_manually", "by", adminEmail));
+            String body = String.format(
+                    "Bonjour %s %s,%n%n" +
+                    "Votre paiement a été confirmé manuellement par l'administration.%n%n" +
+                    "Vous pouvez maintenant soumettre votre CSR sur la plateforme PKI Souverain.%n%n" +
+                    "Cordialement,%nAutorité de Certification Souveraine",
+                    user.getFirstName(), user.getLastName()
+            );
+            emailService.sendSimpleEmail(user.getEmail(), "Paiement confirmé — PKI Souverain", body);
+        }
+
+        return ResponseEntity.ok(Map.of("status", "PAYMENT_CONFIRMED", "message", "Paiement confirmé manuellement."));
+    }
 }
