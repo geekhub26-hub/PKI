@@ -696,12 +696,24 @@ public class UserController {
         }
 
         String password = generateP12Password();
-        byte[] p12Bytes = caService.buildPkcs12(
-                certificate.getCertificatePem(),
-                certificate.getPrivateKeyPem(),
-                password,
-                "cert-" + certificate.getId()
-        );
+        byte[] p12Bytes;
+        try {
+            p12Bytes = caService.buildPkcs12(
+                    certificate.getCertificatePem(),
+                    certificate.getPrivateKeyPem(),
+                    password,
+                    "cert-" + certificate.getId()
+            );
+        } catch (Exception e) {
+            log.error("Erreur génération PKCS12 pour certificat {}: {}", certificateId, e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of(
+                    "error", "Impossible de générer le fichier .p12 : " + e.getMessage()
+            ));
+        }
+        if (p12Bytes == null || p12Bytes.length == 0) {
+            log.error("PKCS12 vide pour certificat {}", certificateId);
+            return ResponseEntity.status(500).body(Map.of("error", "Le fichier .p12 généré est vide."));
+        }
 
         String emailBody = String.format(
             "Bonjour %s %s,\n\n" +

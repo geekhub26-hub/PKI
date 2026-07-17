@@ -480,7 +480,10 @@ public class CAService {
             X509Certificate cert = parseCertificateFromPem(certificatePem);
             PrivateKey privateKey = parsePrivateKeyFromPem(privateKeyPem);
 
-            KeyStore ks = KeyStore.getInstance("PKCS12");
+            // Use BC provider: generates PKCS12 with 3DES/SHA1 (legacy RFC 7292 format)
+            // compatible with Firefox/NSS, macOS Keychain, OpenSSL — unlike Java 21's
+            // default SunJSSE which uses AES-256-CBC (PBES2) rejected by many importers.
+            KeyStore ks = KeyStore.getInstance("PKCS12", BouncyCastleProvider.PROVIDER_NAME);
             ks.load(null, null);
 
             String resolvedAlias = (alias == null || alias.isBlank()) ? "user-cert" : alias;
