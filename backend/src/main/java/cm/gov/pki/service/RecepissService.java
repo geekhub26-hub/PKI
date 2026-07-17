@@ -744,18 +744,23 @@ public class RecepissService {
         }
 
         // 5. Top 5 entités (requête DB directe, indépendante des filtres date/statut/type)
-        List<Object[]> top5EntitesRaw = entiteId != null
-                ? recepissRepository.top5EntitesForEntite(entiteId)
-                : recepissRepository.top5EntitesGlobal(org.springframework.data.domain.PageRequest.of(0, 5));
-        List<Map<String, Object>> top5Entites = top5EntitesRaw.stream()
-                .map(row -> {
-                    Map<String, Object> m = new LinkedHashMap<>();
-                    m.put("entiteId", row[0] != null ? row[0].toString() : "");
-                    m.put("nom",      row[1] != null ? row[1].toString() : "");
-                    m.put("count",    row[2]);
-                    return m;
-                })
-                .collect(java.util.stream.Collectors.toList());
+        List<Map<String, Object>> top5Entites = new ArrayList<>();
+        try {
+            List<Object[]> top5EntitesRaw = entiteId != null
+                    ? recepissRepository.top5EntitesForEntite(entiteId)
+                    : recepissRepository.top5EntitesGlobal(org.springframework.data.domain.PageRequest.of(0, 5));
+            top5Entites = top5EntitesRaw.stream()
+                    .map(row -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("entiteId", row[0] != null ? row[0].toString() : "");
+                        m.put("nom",      row[1] != null ? row[1].toString() : "");
+                        m.put("count",    row[2]);
+                        return m;
+                    })
+                    .collect(java.util.stream.Collectors.toList());
+        } catch (Exception ex) {
+            log.warn("Impossible de calculer le top5 entités : {}", ex.getMessage());
+        }
 
         // 6. Top 5 agents AEL (requête DB directe)
         List<Map<String, Object>> top5Agents = new ArrayList<>();
