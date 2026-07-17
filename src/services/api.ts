@@ -483,6 +483,12 @@ export const paymentService = {
     );
     return response.data;
   },
+  verifyPayment: async (requestId: string): Promise<{ status: string; message: string }> => {
+    const response = await apiClient.post<{ status: string; message: string }>(
+      `/payment/verify/${requestId}`
+    );
+    return response.data;
+  },
 };
 
 export const adminService = {
@@ -706,6 +712,12 @@ export const adminService = {
     role: string; entiteId?: string; telephone?: string;
   }): Promise<any> => {
     const r = await apiClient.post('/admin/users/create-admin', body);
+    return r.data;
+  },
+
+  // Confirmation manuelle de paiement
+  confirmPayment: async (requestId: string): Promise<{ status: string; message: string }> => {
+    const r = await apiClient.post<{ status: string; message: string }>(`/admin/payment/confirm/${requestId}`);
     return r.data;
   },
 

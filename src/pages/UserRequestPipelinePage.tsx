@@ -12,6 +12,11 @@ export default function UserRequestPipelinePage() {
   const [error, setError] = useState<string | null>(null);
   const [requests, setRequests] = useState<UserCertificateRequest[]>([]);
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [verifyMsg, setVerifyMsg] = useState<{ id: string; text: string; ok: boolean } | null>(null);
+
+  const reload = () =>
+    userService.getMyRequests().then(setRequests).catch(() => {});
 
   useEffect(() => {
     userService
@@ -37,6 +42,20 @@ export default function UserRequestPipelinePage() {
     } catch (err) {
       setError(readApiError(err, 'Impossible de créer la session de paiement. Réessayez.'));
       setPayingId(null);
+    }
+  };
+
+  const handleVerify = async (r: UserCertificateRequest) => {
+    setVerifyingId(r.id);
+    setVerifyMsg(null);
+    try {
+      const res = await paymentService.verifyPayment(r.id);
+      setVerifyMsg({ id: r.id, text: res.message, ok: res.status === 'PAYMENT_CONFIRMED' });
+      await reload();
+    } catch (err) {
+      setVerifyMsg({ id: r.id, text: readApiError(err, 'Impossible de vérifier le paiement.'), ok: false });
+    } finally {
+      setVerifyingId(null);
     }
   };
 
@@ -153,7 +172,10 @@ export default function UserRequestPipelinePage() {
           items={awaitingPayment}
           empty="Aucun paiement en attente de confirmation."
           onRetry={handlePay}
+          onVerify={handleVerify}
           loadingId={payingId}
+          verifyingId={verifyingId}
+          verifyMsg={verifyMsg}
         />
       </div>
 
@@ -236,10 +258,15 @@ function StatusList({
 }
 
 function PaymentPendingList({
-  title, icon, items, empty, onRetry, loadingId,
+  title, icon, items, empty, onRetry, onVerify, loadingId, verifyingId, verifyMsg,
 }: {
   title: string; icon: React.ReactNode; items: UserCertificateRequest[];
-  empty: string; onRetry: (r: UserCertificateRequest) => void; loadingId: string | null;
+  empty: string;
+  onRetry: (r: UserCertificateRequest) => void;
+  onVerify: (r: UserCertificateRequest) => void;
+  loadingId: string | null;
+  verifyingId: string | null;
+  verifyMsg: { id: string; text: string; ok: boolean } | null;
 }) {
   return (
     <div className="pki-card p-5">
@@ -255,7 +282,7 @@ function PaymentPendingList({
         <div className="space-y-2">
           {items.map((r) => (
             <div key={r.id} className="rounded-xl border border-slate-100 dark:border-slate-700/50 bg-amber-50/60 dark:bg-amber-950/20 p-3">
-              <div className="flex items-center gap-2">
+              <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
                     {r.commonName || 'Demande'}
@@ -264,21 +291,40 @@ function PaymentPendingList({
                     {r.organization || 'Organisation non renseignée'}
                   </p>
                   <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400">
-                    En attente de confirmation par SharePay. Si le paiement n'est pas confirmé dans quelques minutes, vous pouvez réessayer.
+                    Paiement initié — cliquez sur «&nbsp;Vérifier&nbsp;» pour contrôler le statut chez SharePay.
                   </p>
-                </div>
-                <button
-                  onClick={() => onRetry(r)}
-                  disabled={loadingId === r.id}
-                  className="btn btn-primary shrink-0"
-                  style={{ padding: '5px 12px', fontSize: '12px' }}
-                >
-                  {loadingId === r.id ? (
-                    <span className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent" />
-                  ) : (
-                    <>Réessayer <ChevronRight size={12} /></>
+                  {verifyMsg?.id === r.id && (
+                    <p className={`mt-1 text-[11px] font-medium ${verifyMsg.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {verifyMsg.text}
+                    </p>
                   )}
-                </button>
+                </div>
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <button
+                    onClick={() => onVerify(r)}
+                    disabled={verifyingId === r.id || loadingId === r.id}
+                    className="btn btn-green"
+                    style={{ padding: '5px 12px', fontSize: '12px' }}
+                  >
+                    {verifyingId === r.id ? (
+                      <span className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent" />
+                    ) : (
+                      <>Vérifier <ChevronRight size={12} /></>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => onRetry(r)}
+                    disabled={loadingId === r.id || verifyingId === r.id}
+                    className="btn btn-primary"
+                    style={{ padding: '5px 12px', fontSize: '12px' }}
+                  >
+                    {loadingId === r.id ? (
+                      <span className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent" />
+                    ) : (
+                      'Repayer'
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           ))}

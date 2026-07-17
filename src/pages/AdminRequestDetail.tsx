@@ -27,6 +27,7 @@ export default function AdminRequestDetail() {
   const [previewType, setPreviewType] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState<string>('');
   const [notes, setNotes]         = useState<string>('');
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
   const { addToast } = useToast();
 
   const load = async () => {
@@ -140,6 +141,18 @@ export default function AdminRequestDetail() {
     } finally { setBusy(false); }
   };
 
+  const handleConfirmPayment = async () => {
+    if (!id) return;
+    setConfirmingPayment(true);
+    try {
+      await adminService.confirmPayment(id);
+      addToast({ type: 'success', message: 'Paiement confirmé manuellement.' });
+      await load();
+    } catch (e: any) {
+      addToast({ type: 'error', message: e?.response?.data?.error || 'Impossible de confirmer le paiement.' });
+    } finally { setConfirmingPayment(false); }
+  };
+
   const copyPemToClipboard = async () => { if (pemText) await navigator.clipboard.writeText(pemText); };
 
   const downloadPem = (filename = `certificate-${request?.id || 'cert'}.pem`) => {
@@ -164,9 +177,10 @@ export default function AdminRequestDetail() {
     : request.status === 'NEEDS_CORRECTION' ? 'status-badge status-rejected'
     : 'status-badge status-pending';
 
-  const isPendingReview = request.status === 'PENDING_REVIEW' || request.status === 'PENDING';
-  const isCsrStage      = request.status === 'CSR_SUBMITTED' || request.status === 'REVIEW_APPROVED';
-  const hasActions      = isPendingReview || isCsrStage || request.status === 'REVIEW_APPROVED' || request.status === 'ISSUED';
+  const isPendingReview  = request.status === 'PENDING_REVIEW' || request.status === 'PENDING';
+  const isCsrStage       = request.status === 'CSR_SUBMITTED' || request.status === 'REVIEW_APPROVED';
+  const isAwaitingPayment = request.status === 'AWAITING_PAYMENT';
+  const hasActions       = isPendingReview || isCsrStage || isAwaitingPayment || request.status === 'ISSUED';
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 py-6">
@@ -366,6 +380,21 @@ export default function AdminRequestDetail() {
             {!hasActions && (
               <div className="rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 p-4 text-center text-sm text-slate-400">
                 Aucune action disponible.
+              </div>
+            )}
+
+            {isAwaitingPayment && (
+              <div className="space-y-3">
+                <p className="text-xs text-amber-700 dark:text-amber-400 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 px-3 py-2">
+                  L'utilisateur a initié un paiement SharePay. Si le webhook n'est pas arrivé automatiquement, vous pouvez confirmer manuellement après vérification.
+                </p>
+                <button
+                  onClick={handleConfirmPayment}
+                  disabled={confirmingPayment || busy}
+                  className="btn btn-green w-full"
+                >
+                  {confirmingPayment ? 'Confirmation…' : 'Confirmer le paiement manuellement'}
+                </button>
               </div>
             )}
 
