@@ -4,7 +4,7 @@ import {
   BookOpen, User, Shield, FileText, Award, CheckSquare, XCircle,
   Download, BarChart3, Key, RefreshCw, Users, ClipboardList,
   ChevronRight, AlertTriangle, Info, CheckCircle2, Lock,
-  ArrowRight, Search, LogIn, UserPlus, LayoutGrid,
+  ArrowRight, Search, LogIn, UserPlus, LayoutGrid, CreditCard, Printer, Settings2,
 } from 'lucide-react';
 
 const ADMIN_ROLES = ['ADMIN','SUPER_ADMIN','AE_CENTRALE','ADMIN_AEL','AEL'];
@@ -33,11 +33,14 @@ const ADMIN_SECTIONS: Section[] = [
   { id: 'a-intro',        label: 'Vue d\'ensemble',          icon: BookOpen      },
   { id: 'a-dashboard',    label: 'Dashboard & Stats',        icon: BarChart3     },
   { id: 'a-requests',     label: 'Gérer les demandes',       icon: ClipboardList },
+  { id: 'a-payment',      label: 'Paiements',                icon: CreditCard    },
+  { id: 'a-recepisses',   label: 'Récépissés',               icon: ClipboardList },
   { id: 'a-ca',           label: 'Autorité de Certification',icon: Key           },
   { id: 'a-sign',         label: 'Signer des CSR',           icon: Award         },
   { id: 'a-crl',          label: 'CRL & Révocation',         icon: RefreshCw     },
   { id: 'a-audit',        label: 'Journal d\'audit',         icon: Shield        },
   { id: 'a-users',        label: 'Gestion des utilisateurs', icon: Users         },
+  { id: 'a-superadmin',   label: 'Super Admin',              icon: Settings2     },
 ];
 
 /* ── Small helper components ───────────────────────────── */
@@ -214,13 +217,15 @@ function UserDocs() {
           <p className="text-slate-600 dark:text-slate-400">Chaque demande passe par plusieurs étapes. Voici la signification de chaque statut :</p>
           <div className="space-y-2">
             {[
-              { s: 'En attente',     cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',      desc: 'Votre dossier a été soumis et attend un examen par un administrateur.' },
-              { s: 'En révision',    cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',          desc: 'Un administrateur examine actuellement votre dossier.' },
-              { s: 'Approuvée',      cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',  desc: 'Votre demande est approuvée. Vous pouvez soumettre votre CSR.' },
-              { s: 'CSR soumis',     cls: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',  desc: 'Votre CSR a été soumis et est en attente de signature.' },
-              { s: 'Correction req.',cls: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',          desc: 'L\'administrateur demande une correction. Vérifiez les commentaires.' },
-              { s: 'Émis',           cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300', desc: 'Votre certificat a été signé et est disponible dans Mes certificats.' },
-              { s: 'Rejeté',         cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',              desc: 'Votre demande a été refusée. Consultez la raison dans les détails.' },
+              { s: 'En attente',       cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',       desc: 'Votre dossier a été soumis et attend un examen par un administrateur.' },
+              { s: 'En révision',      cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',           desc: 'Un administrateur examine actuellement votre dossier.' },
+              { s: 'Approuvée',        cls: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',   desc: 'Votre demande est approuvée. Procédez au paiement des frais pour continuer.' },
+              { s: 'Attente paiement', cls: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',   desc: 'Votre session de paiement est en cours. Complétez le paiement sur SharePay.' },
+              { s: 'Paiement confirmé',cls: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',          desc: 'Paiement reçu. Vous pouvez maintenant soumettre votre CSR.' },
+              { s: 'CSR soumis',       cls: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',   desc: 'Votre CSR a été soumis et est en attente de signature par l\'administration.' },
+              { s: 'Correction req.',  cls: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',           desc: 'L\'administrateur demande une correction. Vérifiez les commentaires.' },
+              { s: 'Émis',             cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300', desc: 'Votre certificat a été signé et est disponible dans Mes certificats.' },
+              { s: 'Rejeté',           cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',               desc: 'Votre demande a été refusée. Consultez la raison dans les détails.' },
             ].map(({ s, cls, desc }) => (
               <div key={s} className="flex items-start gap-3 rounded-xl border border-slate-100 dark:border-slate-700/60 p-3">
                 <StatusBadge label={s} cls={cls} />
@@ -228,6 +233,10 @@ function UserDocs() {
               </div>
             ))}
           </div>
+          <Note type="info">
+            <strong>Étape paiement :</strong> après approbation, cliquez sur <strong>Payer les frais</strong> dans la page <em>Demandes en cours</em>.
+            Vous serez redirigé vers SharePay. Une fois le paiement confirmé (par webhook ou via le bouton <em>Vérifier</em>), la soumission du CSR est débloquée.
+          </Note>
           <Note type="warn">Si votre statut est <strong>Correction requise</strong>, corrigez votre dossier dans les plus brefs délais pour éviter une annulation.</Note>
         </div>
       </section>
@@ -523,6 +532,160 @@ function AdminDocs() {
         </div>
       </section>
 
+      {/* Paiements */}
+      <section>
+        <SectionTitle id="a-payment" icon={CreditCard} title="Paiements" subtitle="Suivi et gestion des paiements SharePay" />
+        <div className="space-y-4 text-sm text-slate-600 dark:text-slate-400">
+          <p>
+            La page <strong>Paiements</strong> liste toutes les demandes ayant initié ou complété un paiement via SharePay.
+            Elle permet de surveiller l'état des paiements et d'intervenir manuellement si nécessaire.
+          </p>
+          <div>
+            <h3 className="mb-3 font-semibold text-slate-800 dark:text-white">Colonnes affichées</h3>
+            <div className="space-y-2">
+              {[
+                { label: 'Utilisateur',        desc: 'Nom et email du demandeur.' },
+                { label: 'Demande (CN)',        desc: 'Common Name du certificat demandé et ID court de la demande.' },
+                { label: 'Référence SharePay', desc: 'Identifiant unique du paiement chez SharePay.' },
+                { label: 'Montant',            desc: 'Montant configuré pour les certificats (paramétrable par le Super Admin).' },
+                { label: 'Date initiation',    desc: 'Date et heure à laquelle le paiement a été initié.' },
+                { label: 'Statut',             desc: 'En attente (paiement non finalisé) ou Confirmé (paiement reçu).' },
+              ].map(({ label, desc }) => (
+                <div key={label} className="flex items-start gap-3 rounded-xl border border-slate-100 dark:border-slate-700/60 p-3">
+                  <ChevronRight size={13} className="mt-0.5 shrink-0 text-emerald-500" />
+                  <div><p className="font-medium text-slate-800 dark:text-white">{label}</p><p className="text-xs text-slate-500 dark:text-slate-400">{desc}</p></div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <h3 className="mb-3 font-semibold text-slate-800 dark:text-white">Actions disponibles</h3>
+            <div className="space-y-3">
+              {[
+                { action: 'Confirmer',          desc: 'Confirme manuellement un paiement bloqué en attente. La demande passe à PAYMENT_CONFIRMED et l\'utilisateur est notifié par email.' },
+                { action: 'Vérifier SharePay',  desc: 'Interroge l\'API SharePay pour connaître le statut réel du paiement. Si le paiement est SUCCESS côté SharePay mais pas encore reflété dans le système, il est automatiquement confirmé.' },
+                { action: 'Voir la demande',    desc: 'Ouvre le détail complet de la demande de certification liée.' },
+              ].map(({ action, desc }) => (
+                <div key={action} className="flex items-start gap-3">
+                  <div className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded bg-emerald-100 dark:bg-emerald-900/30">
+                    <ChevronRight size={12} className="text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-slate-800 dark:text-white">{action}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <Note type="info">
+            Le flux de paiement normal est géré automatiquement via le webhook SharePay. La confirmation manuelle sert uniquement pour les cas où le webhook n'a pas pu être livré (cold start du serveur, coupure réseau, etc.).
+          </Note>
+          <Note type="warn">
+            Confirmez manuellement uniquement si vous avez vérfié côté SharePay que le paiement a bien eu lieu. Toute confirmation est enregistrée dans le journal d'audit.
+          </Note>
+        </div>
+      </section>
+
+      {/* Récépissés Admin */}
+      <section>
+        <SectionTitle id="a-recepisses" icon={ClipboardList} title="Récépissés" subtitle="Gérer et émettre les récépissés officiels" />
+        <div className="space-y-4 text-sm text-slate-600 dark:text-slate-400">
+          <p>
+            La page <strong>Récépissés</strong> (accessible depuis le menu <em>Récépissés</em>) offre une vue analytique complète
+            et les outils de gestion des récépissés émis par la plateforme.
+          </p>
+          <div>
+            <h3 className="mb-2 font-semibold text-slate-800 dark:text-white">Statistiques disponibles</h3>
+            <ul className="space-y-1">
+              {[
+                'Nombre total de récépissés (actifs, annulés)',
+                'Top 5 agents ayant généré le plus de récépissés',
+                'Top 5 entités par volume',
+                'Répartition par type de certificat',
+                'Filtrage par date, statut, type, entité et profil initiateur',
+              ].map((item) => (
+                <li key={item} className="flex items-center gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h3 className="mb-3 font-semibold text-slate-800 dark:text-white">Actions administratives</h3>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {[
+                { action: 'Générer un récépissé',   desc: 'Émet un récépissé pour une demande ISSUED (ou toute demande avec un ID valide).' },
+                { action: 'Régénérer',              desc: 'Recrée le PDF d\'un récépissé existant (mise à jour du contenu).' },
+                { action: 'Annuler',                desc: 'Invalide un récépissé avec un motif. L\'annulation est définitive.' },
+                { action: 'Télécharger PDF',        desc: 'Télécharge le PDF non signé ou signé électroniquement.' },
+                { action: 'Exporter CSV / Excel',   desc: 'Exporte la liste complète des récépissés dans le format souhaité.' },
+                { action: 'Export rapport PDF',     desc: 'Génère un rapport PDF des statistiques filtrées.' },
+              ].map(({ action, desc }) => (
+                <div key={action} className="rounded-xl border border-slate-100 dark:border-slate-700/60 p-3">
+                  <p className="font-semibold text-slate-800 dark:text-white text-xs">{action}</p>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <Note type="ok">
+            Les récépissés peuvent être vérifiés publiquement sans connexion via la page <strong>/verify</strong> en saisissant le numéro de référence.
+          </Note>
+        </div>
+      </section>
+
+      {/* Super Admin */}
+      <section>
+        <SectionTitle id="a-superadmin" icon={Settings2} title="Super Admin" subtitle="Paramètres système et gestion avancée" />
+        <div className="space-y-4 text-sm text-slate-600 dark:text-slate-400">
+          <Note type="warn">
+            Les fonctionnalités Super Admin sont réservées à un seul compte par instance de la plateforme. Ces actions ont un impact direct sur le comportement global du système.
+          </Note>
+          <div>
+            <h3 className="mb-3 font-semibold text-slate-800 dark:text-white">Paramètres configurables</h3>
+            <div className="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700/60">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-800/50">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-slate-500">Paramètre</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-slate-500">Description</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/40">
+                  {[
+                    ['payment_amount',   'Montant des frais de certification en FCFA (ex : 5000)'],
+                    ['ca_validity_days', 'Durée de validité de l\'AC en jours (ex : 3650 = 10 ans)'],
+                    ['cert_validity_days','Durée de validité des certificats utilisateurs émis'],
+                    ['smtp_host',        'Serveur SMTP pour l\'envoi d\'emails'],
+                    ['sharepay_mode',    'Mode paiement : sandbox ou production'],
+                  ].map(([p, d]) => (
+                    <tr key={p}>
+                      <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-800 dark:text-white">{p}</td>
+                      <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{d}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <h3 className="mb-3 font-semibold text-slate-800 dark:text-white">Créer un compte administrateur</h3>
+            <p className="mb-2">Le Super Admin peut créer des comptes avec des rôles élevés directement depuis la page <strong>Paramètres & Admins</strong> :</p>
+            <div className="space-y-0">
+              <Step n={1} title="Accédez à Paramètres & Admins" />
+              <Step n={2} title="Remplissez le formulaire de création"><p>Email, prénom, nom, rôle (ADMIN, AE_CENTRALE, ADMIN_AEL, AEL) et entité si applicable.</p></Step>
+              <Step n={3} title="Le compte est créé avec un mot de passe temporaire"><p>L'administrateur reçoit un email lui demandant de définir son mot de passe.</p></Step>
+            </div>
+          </div>
+          <div>
+            <h3 className="mb-2 font-semibold text-slate-800 dark:text-white">Prix du certificat</h3>
+            <p>La page <strong>Prix certificat</strong> permet de modifier rapidement le montant des frais SharePay appliqués à toute nouvelle session de paiement.</p>
+          </div>
+        </div>
+      </section>
+
     </div>
   );
 }
@@ -558,21 +721,29 @@ export default function DocsPage() {
 
       {/* Header */}
       <div className="page-header-bar">
-        <div className="flex items-center gap-4">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15">
-            {isAdmin ? <Shield size={22} className="text-white" /> : <User size={22} className="text-white" />}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15">
+              {isAdmin ? <Shield size={22} className="text-white" /> : <User size={22} className="text-white" />}
+            </div>
+            <div>
+              <p className="mb-0.5 text-xs font-bold uppercase tracking-widest text-white/50">
+                {isAdmin ? 'Espace Administrateur' : 'Espace Utilisateur'}
+              </p>
+              <h1 className="flex items-center gap-2 text-2xl font-bold text-white">
+                <BookOpen size={20} /> Documentation
+              </h1>
+              <p className="mt-0.5 text-sm text-white/60">
+                {isAdmin ? 'Guide d\'administration de la plateforme PKI Souverain' : 'Guide d\'utilisation de la plateforme PKI Souverain'}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="mb-0.5 text-xs font-bold uppercase tracking-widest text-white/50">
-              {isAdmin ? 'Espace Administrateur' : 'Espace Utilisateur'}
-            </p>
-            <h1 className="flex items-center gap-2 text-2xl font-bold text-white">
-              <BookOpen size={20} /> Documentation
-            </h1>
-            <p className="mt-0.5 text-sm text-white/60">
-              {isAdmin ? 'Guide d\'administration de la plateforme PKI Souverain' : 'Guide d\'utilisation de la plateforme PKI Souverain'}
-            </p>
-          </div>
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20 transition print:hidden"
+          >
+            <Printer size={15} /> Imprimer / PDF
+          </button>
         </div>
       </div>
 

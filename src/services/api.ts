@@ -721,6 +721,12 @@ export const adminService = {
     return r.data;
   },
 
+  // Liste de tous les paiements (initiés ou confirmés)
+  getPayments: async (): Promise<any[]> => {
+    const r = await apiClient.get<any[]>('/admin/payments');
+    return r.data;
+  },
+
   // Paramètres superadmin
   getParametres: async (): Promise<any[]> => {
     const r = await apiClient.get<any[]>('/superadmin/parametres');

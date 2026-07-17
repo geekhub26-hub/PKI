@@ -31,6 +31,7 @@ const adminLinks = [
   { to: '/admin/revoke-certificate', label: 'Révoquer cert.',    icon: XCircle },
   { to: '/admin/download-crl',       label: 'Télécharger CRL',   icon: Download },
   { to: '/admin/entites',            label: 'Entités',           icon: Building2 },
+  { to: '/admin/payments',           label: 'Paiements',         icon: CreditCard },
   { to: '/admin/settings',           label: 'Prix certificat',   icon: CreditCard },
 ];
 
