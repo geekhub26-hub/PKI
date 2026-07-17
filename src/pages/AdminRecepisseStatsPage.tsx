@@ -155,9 +155,13 @@ export default function AdminRecepisseStatsPage() {
     setError(null);
     const qs = buildQuery();
     fetch(`${API_BASE}/admin/recepisses/stats${qs ? '?' + qs : ''}`, { headers: authHeader() })
-      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(async (r) => {
+        const json = await r.json();
+        if (!r.ok) throw new Error(json?.error || `HTTP ${r.status}`);
+        return json;
+      })
       .then(setStats)
-      .catch(() => setError('Impossible de charger les statistiques.'))
+      .catch((e: Error) => setError(e.message || 'Impossible de charger les statistiques.'))
       .finally(() => setLoading(false));
   };
 
