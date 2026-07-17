@@ -12,6 +12,7 @@ import cm.gov.pki.service.AuditService;
 import cm.gov.pki.service.CAService;
 import cm.gov.pki.service.EmailService;
 import cm.gov.pki.service.IdentityDocumentAiService;
+import cm.gov.pki.service.SharePayService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,6 +77,7 @@ public class UserController {
     private final EmailService emailService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SharePayService sharePayService;
 
     @Autowired
     public UserController(
@@ -87,7 +89,8 @@ public class UserController {
             AuditService auditService,
             EmailService emailService,
             UserRepository userRepository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            SharePayService sharePayService
     ) {
         this.certificateRepository = certificateRepository;
         this.certificateRequestRepository = certificateRequestRepository;
@@ -98,6 +101,7 @@ public class UserController {
         this.auditService = auditService;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.sharePayService = sharePayService;
     }
 
     private AuthDTO.UserDTO toUserDTO(User user) {
@@ -410,8 +414,14 @@ public class UserController {
         CertificateRequest req = opt.get();
 
         String reqStatus = req.getStatus() == null ? "" : req.getStatus().toUpperCase();
+        if ("AWAITING_PAYMENT".equals(reqStatus)) {
+            reqStatus = autoConfirmIfPaid(req);
+        }
         if (!"PAYMENT_CONFIRMED".equals(reqStatus)) {
-            return ResponseEntity.status(400).body(Map.of("error", "Payment confirmation required before CSR submission"));
+            return ResponseEntity.status(400).body(Map.of("error",
+                    "AWAITING_PAYMENT".equals(reqStatus)
+                    ? "Paiement non encore confirmé par SharePay. Utilisez le bouton 'Vérifier' sur la page de suivi."
+                    : "Confirmation de paiement requise avant la soumission du CSR."));
         }
 
         String csrContent;
@@ -452,8 +462,14 @@ public class UserController {
         CertificateRequest req = opt.get();
 
         String reqStatus2 = req.getStatus() == null ? "" : req.getStatus().toUpperCase();
+        if ("AWAITING_PAYMENT".equals(reqStatus2)) {
+            reqStatus2 = autoConfirmIfPaid(req);
+        }
         if (!"PAYMENT_CONFIRMED".equals(reqStatus2)) {
-            return ResponseEntity.status(400).body(Map.of("error", "Payment confirmation required before CSR submission"));
+            return ResponseEntity.status(400).body(Map.of("error",
+                    "AWAITING_PAYMENT".equals(reqStatus2)
+                    ? "Paiement non encore confirmé par SharePay. Utilisez le bouton 'Vérifier' sur la page de suivi."
+                    : "Confirmation de paiement requise avant la soumission du CSR."));
         }
 
         String resolvedCn = (cn == null || cn.isBlank()) ? req.getCommonName() : cn.trim();
@@ -485,6 +501,27 @@ public class UserController {
         );
         req.setServerPrivateKeyPem(generated.getPrivateKeyPem());
         return finalizeCsrSubmission(req, generated.getCsrPem());
+    }
+
+    /**
+     * Si la demande est en AWAITING_PAYMENT et que SharePay confirme le paiement,
+     * met à jour le statut en PAYMENT_CONFIRMED et retourne le nouveau statut.
+     */
+    private String autoConfirmIfPaid(CertificateRequest req) {
+        String ref = req.getSharePayReference();
+        if (ref == null || ref.isBlank()) return req.getStatus();
+        try {
+            String payStatus = sharePayService.getPayInStatus(ref);
+            if ("SUCCESS".equalsIgnoreCase(payStatus)) {
+                req.setStatus("PAYMENT_CONFIRMED");
+                certificateRequestRepository.save(req);
+                log.info("Paiement auto-confirmé lors de la soumission CSR pour demande {} (ref={})", req.getId(), ref);
+                return "PAYMENT_CONFIRMED";
+            }
+        } catch (Exception e) {
+            log.warn("Auto-vérification paiement impossible pour demande {}: {}", req.getId(), e.getMessage());
+        }
+        return req.getStatus();
     }
 
     private ResponseEntity<?> finalizeCsrSubmission(CertificateRequest req, String csrContent) {

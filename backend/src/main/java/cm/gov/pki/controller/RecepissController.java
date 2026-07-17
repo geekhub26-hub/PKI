@@ -86,17 +86,22 @@ public class RecepissController {
             @RequestParam(required = false) String typeCertif,
             @RequestParam(required = false) java.util.UUID entiteId,
             @RequestParam(required = false) String profilInitiateur) {
+        try {
+            User user = resolveUser(auth);
+            java.util.UUID effectiveEntiteId = entiteId;
 
-        User user = resolveUser(auth);
-        java.util.UUID effectiveEntiteId = entiteId;
+            if (user.getRole() == User.UserRole.AEL || user.getRole() == User.UserRole.ADMIN_AEL) {
+                effectiveEntiteId = user.getEntite() != null ? user.getEntite().getId() : null;
+            }
 
-        if (user.getRole() == User.UserRole.AEL || user.getRole() == User.UserRole.ADMIN_AEL) {
-            effectiveEntiteId = user.getEntite() != null ? user.getEntite().getId() : null;
+            return ResponseEntity.ok(recepissService.getStats(
+                    effectiveEntiteId, parseDate(dateDebut), parseDate(dateFin),
+                    statut, typeCertif, profilInitiateur));
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(RecepissController.class)
+                    .error("Erreur chargement stats récépissés: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("error", "Impossible de charger les statistiques: " + e.getMessage()));
         }
-
-        return ResponseEntity.ok(recepissService.getStats(
-                effectiveEntiteId, parseDate(dateDebut), parseDate(dateFin),
-                statut, typeCertif, profilInitiateur));
     }
 
     private static java.time.LocalDate parseDate(String s) {

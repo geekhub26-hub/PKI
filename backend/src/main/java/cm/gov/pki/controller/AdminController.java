@@ -349,7 +349,6 @@ public class AdminController {
 		return ResponseEntity.ok(resp);
 	}
 
-	@PreAuthorize("hasRole('SUPER_ADMIN')")
 	@Transactional(readOnly = true)
 	@GetMapping("/audit-logs")
 	public ResponseEntity<?> listAuditLogs(
