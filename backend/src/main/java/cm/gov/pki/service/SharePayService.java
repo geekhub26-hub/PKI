@@ -1,5 +1,6 @@
 package cm.gov.pki.service;
 
+import cm.gov.pki.repository.ParametreRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -34,20 +35,28 @@ public class SharePayService {
     @Value("${pki.payment.sharepay.webhook-secret:}")
     private String webhookSecret;
 
-    @Value("${pki.payment.amount:5000}")
-    private BigDecimal defaultAmount;
-
     @Value("${pki.payment.currency:XAF}")
     private String defaultCurrency;
 
+    private final ParametreRepository parametreRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public SharePayService() {
+    public SharePayService(ParametreRepository parametreRepository) {
+        this.parametreRepository = parametreRepository;
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(10_000);
         factory.setReadTimeout(30_000);
         this.restTemplate = new RestTemplate(factory);
+    }
+
+    private BigDecimal resolveAmount() {
+        return parametreRepository.findById("payment_amount")
+                .map(p -> {
+                    try { return new BigDecimal(p.getValeur().trim()); }
+                    catch (NumberFormatException e) { return new BigDecimal("5000"); }
+                })
+                .orElse(new BigDecimal("5000"));
     }
 
     /**
@@ -62,7 +71,7 @@ public class SharePayService {
         HttpHeaders headers = buildHeaders();
 
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("amount", defaultAmount);
+        body.put("amount", resolveAmount());
         body.put("currency", defaultCurrency);
         body.put("merchantReference", merchantReference);
         body.put("description", "Certificat numérique PKI Souverain — " + merchantReference);
