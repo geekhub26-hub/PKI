@@ -13,6 +13,7 @@ export default function UserCertificatesPage() {
   const [downloading, setDownloading]           = useState<'pem' | 'crt' | 'p12' | null>(null);
   const [p12GeneratedPassword, setP12GeneratedPassword] = useState<string | null>(null);
   const [p12EmailSent, setP12EmailSent]         = useState(false);
+  const [p12PendingData, setP12PendingData]     = useState<{ p12Base64: string; filename: string } | null>(null);
   const [renewMessage, setRenewMessage]         = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,24 +62,33 @@ export default function UserCertificatesPage() {
     try {
       setDownloading('p12');
       setP12GeneratedPassword(null);
+      setP12PendingData(null);
       const { p12Base64, password, emailSent, filename } = await userService.downloadCertificateP12(cert.id);
-      const bytes = Uint8Array.from(atob(p12Base64), (c) => c.charCodeAt(0));
-      const blob = new Blob([bytes], { type: 'application/x-pkcs12' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      // Show password first — user must click "Télécharger" to actually get the file
       setP12GeneratedPassword(password);
       setP12EmailSent(emailSent);
+      setP12PendingData({ p12Base64, filename });
     } catch {
       setError('Erreur lors du téléchargement du fichier .p12.');
     } finally {
       setDownloading(null);
     }
+  }
+
+  function triggerP12Download() {
+    if (!p12PendingData) return;
+    const { p12Base64, filename } = p12PendingData;
+    const bytes = Uint8Array.from(atob(p12Base64), (c) => c.charCodeAt(0));
+    const blob = new Blob([bytes], { type: 'application/x-pkcs12' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setP12PendingData(null);
   }
 
   async function renewCertificate() {
@@ -271,26 +281,46 @@ export default function UserCertificatesPage() {
                 </div>
               ) : (
                 <>
-                  <button
-                    onClick={downloadP12}
-                    disabled={downloading !== null || !cert}
-                    className="btn btn-green w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <KeyRound size={14} />
-                    {downloading === 'p12' ? 'Génération...' : 'Certificat + clé (.p12)'}
-                  </button>
-                  <p className="mt-1.5 text-xs text-slate-400">Mot de passe envoyé à votre email.</p>
+                  {!p12GeneratedPassword && (
+                    <button
+                      onClick={downloadP12}
+                      disabled={downloading !== null || !cert}
+                      className="btn btn-green w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <KeyRound size={14} />
+                      {downloading === 'p12' ? 'Génération en cours...' : 'Générer le fichier .p12'}
+                    </button>
+                  )}
+
                   {p12GeneratedPassword && (
-                    <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-800/40 dark:bg-emerald-950/30">
-                      <p className="mb-1 text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                        Mot de passe .p12
+                    <div className="mt-2 rounded-xl border-2 border-emerald-400 bg-emerald-50 p-3 dark:border-emerald-600 dark:bg-emerald-950/40">
+                      <p className="mb-1 text-xs font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
+                        Mot de passe du fichier .p12
                       </p>
-                      <div className="break-all rounded-lg bg-white px-2 py-1.5 font-mono text-sm font-bold tracking-wider text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-100">
+                      <div className="mb-2 break-all rounded-lg bg-white px-2 py-2 font-mono text-sm font-bold tracking-wider text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-100 select-all">
                         {p12GeneratedPassword}
                       </div>
-                      <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
-                        {p12EmailSent ? 'Également envoyé par email.' : 'Notez ce mot de passe — il ne sera plus affiché.'}
+                      <p className="mb-3 text-xs text-emerald-700 dark:text-emerald-400">
+                        {p12EmailSent
+                          ? 'Également envoyé par email. '
+                          : 'Notez ce mot de passe — il ne sera plus affiché. '}
+                        Il vous sera demandé à l'ouverture du fichier.
                       </p>
+                      {p12PendingData && (
+                        <button
+                          onClick={triggerP12Download}
+                          className="btn btn-green w-full"
+                        >
+                          <Download size={14} />
+                          Télécharger le fichier .p12
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { setP12GeneratedPassword(null); setP12PendingData(null); }}
+                        className="mt-2 w-full text-center text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      >
+                        Générer un nouveau .p12
+                      </button>
                     </div>
                   )}
                 </>
