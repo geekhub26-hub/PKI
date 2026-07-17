@@ -232,16 +232,32 @@ public class IdentityDocumentAiService {
         int cniScore = 0;
         int passportScore = 0;
 
+        // Mots-clés dans le nom de fichier
         if (containsAny(fileName, "cni", "identite", "identity", "id_card", "national_id", "carte")) cniScore += 2;
-        if (containsAny(textLc, "carte nationale", "carte d'identite", "national identity", "id card", "cni")) cniScore += 3;
-
         if (containsAny(fileName, "passport", "passeport", "mrz")) passportScore += 2;
-        if (containsAny(textLc, "passport", "passeport", "travel document", "p<")) passportScore += 3;
 
-        // Un peu de robustesse MRZ classique pour passeport
-        if (textLc.contains("p<") && textLc.length() > 40) passportScore += 2;
+        // Mots-clés dans le contenu textuel (OCR ou couche texte)
+        if (containsAny(textLc, "carte nationale", "carte d'identite", "national identity", "id card", "cni")) cniScore += 3;
+        if (containsAny(textLc, "passport", "passeport", "travel document")) passportScore += 3;
 
-        double cniConfidence = Math.min(1.0, cniScore / 6.0);
+        // MRZ TD1 (CNI) : ligne commençant par I< (ex. I<CMR)
+        if (containsAny(textLc, "i<cmr", "i<cam", "i<fra", "i<")) cniScore += 3;
+
+        // MRZ TD3 (passeport) : ligne commençant par P<
+        if (textLc.contains("p<") && textLc.length() > 40) passportScore += 3;
+
+        // Nom de fichier générique de smartphone / scanner
+        // (PXL_, IMG_, DSC_, DCIM, raw, cover, scan, photo…) → on ne peut pas exclure heuristiquement
+        // On donne 1 point neutre au type attendu pour que le mode souple puisse s'activer (confidence > 0)
+        boolean isGenericName = containsAny(fileName,
+                "pxl_", "img_", "dsc_", "dcim", "photo", "scan", "raw", "cover",
+                "image", "screenshot", "capture", "document");
+        if (isGenericName) {
+            if ("CNI".equals(expectedType))       cniScore      = Math.max(cniScore,      1);
+            if ("PASSEPORT".equals(expectedType)) passportScore = Math.max(passportScore, 1);
+        }
+
+        double cniConfidence      = Math.min(1.0, cniScore / 6.0);
         double passportConfidence = Math.min(1.0, passportScore / 6.0);
 
         if ("CNI".equals(expectedType)) {
