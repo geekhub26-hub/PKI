@@ -32,6 +32,7 @@ import VerifyPage from './pages/VerifyPage';
 import SuperAdminSettingsPage from './pages/SuperAdminSettingsPage';
 import AdminRecepisseStatsPage from './pages/AdminRecepisseStatsPage';
 import AdminEntitesPage from './pages/AdminEntitesPage';
+import AdminSettingsPage from './pages/AdminSettingsPage';
 import OtpVerificationPage from './pages/OtpVerificationPage';
 import { AdminRequestDetail, AdminRequestsList, UserRequestsPage } from './pages';
 import { userService } from './services/api';
@@ -161,6 +162,7 @@ function App() {
             <Route path="/admin/recepisses/stats" element={<AdminRecepisseStatsPage />} />
             <Route path="/superadmin/settings" element={<SuperAdminSettingsPage />} />
             <Route path="/admin/entites" element={<AdminEntitesPage />} />
+            <Route path="/admin/settings" element={<AdminSettingsPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" />} />

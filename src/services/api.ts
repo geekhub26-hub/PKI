@@ -718,6 +718,16 @@ export const adminService = {
     const r = await apiClient.put(`/superadmin/parametres/${cle}`, { valeur });
     return r.data;
   },
+
+  // Paramètres paiement (accessible aux admins)
+  getPaymentSettings: async (): Promise<{ payment_amount: string }> => {
+    const r = await apiClient.get<{ payment_amount: string }>('/admin/settings/payment');
+    return r.data;
+  },
+  updatePaymentSettings: async (payment_amount: string): Promise<{ payment_amount: string }> => {
+    const r = await apiClient.put<{ payment_amount: string }>('/admin/settings/payment', { payment_amount });
+    return r.data;
+  },
 };
 
 

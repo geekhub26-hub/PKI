@@ -6,7 +6,7 @@ import { resolveAvatarSrc } from '../utils/avatar';
 import {
   LayoutGrid, Award, FileText, CheckSquare, XCircle, Download,
   BarChart3, RefreshCw, Key, LogOut, ChevronRight,
-  User, UserCog, Menu, X, ClipboardList, Settings2, ShieldCheck, Lock, BookOpen, Building2, Users,
+  User, UserCog, Menu, X, ClipboardList, Settings2, ShieldCheck, Lock, BookOpen, Building2, Users, CreditCard,
 } from 'lucide-react';
 
 const userLinks = [
@@ -31,6 +31,7 @@ const adminLinks = [
   { to: '/admin/revoke-certificate', label: 'Révoquer cert.',    icon: XCircle },
   { to: '/admin/download-crl',       label: 'Télécharger CRL',   icon: Download },
   { to: '/admin/entites',            label: 'Entités',           icon: Building2 },
+  { to: '/admin/settings',           label: 'Prix certificat',   icon: CreditCard },
 ];
 
 const superAdminLinks = [
