@@ -700,6 +700,26 @@ export default function DocsPage() {
   const [search, setSearch] = useState('');
   const contentRef          = useRef<HTMLDivElement>(null);
 
+  // Inject print CSS when the docs page is mounted, remove on unmount
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.id = 'pki-docs-print';
+    style.textContent = `
+      @media print {
+        .sidebar, .topbar { display: none !important; }
+        html, body { height: auto !important; overflow: visible !important; background: white !important; }
+        .h-screen, .overflow-hidden { height: auto !important; overflow: visible !important; }
+        .overflow-y-auto { overflow: visible !important; height: auto !important; }
+        main { padding: 12px !important; }
+        .pki-card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
+        #pki-docs-aside { display: none !important; }
+        .page-header-bar { background: #065f46 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => { document.getElementById('pki-docs-print')?.remove(); };
+  }, []);
+
   useEffect(() => {
     const obs = new IntersectionObserver(
       (entries) => { entries.forEach((e) => { if (e.isIntersecting) setActive(e.target.id); }); },
@@ -750,7 +770,7 @@ export default function DocsPage() {
       <div className="flex gap-6">
 
         {/* ── Side navigation ───────────────────────────────── */}
-        <aside className="hidden lg:block w-56 flex-shrink-0">
+        <aside id="pki-docs-aside" className="hidden lg:block w-56 flex-shrink-0">
           <div className="pki-card sticky top-6 p-3">
             <div className="relative mb-3">
               <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
