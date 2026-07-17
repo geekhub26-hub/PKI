@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Settings2, Save, RefreshCw, CheckCircle, AlertCircle,
   Hash, Clock, UserPlus, Building2, ShieldCheck, Copy, Eye, EyeOff,
-  Timer, KeyRound, FileCheck2, Bell, Lock, BadgeCheck, RotateCcw,
+  Timer, KeyRound, FileCheck2, Bell, Lock, BadgeCheck, RotateCcw, CreditCard,
 } from 'lucide-react';
 import { adminService } from '../services/api';
 import { useToast } from '../components/Toast';
@@ -22,9 +22,11 @@ const LABELS: Record<string, ParamMeta> = {
   rappel_expiration_jours:          { label: "Rappel avant expiration certificat",         hint: "Nombre de jours avant expiration où un email/SMS de rappel est envoyé.",             type: 'number', icon: <Bell       size={14} className="text-orange-500"  />, unit: 'jours'     },
   validation_token_expiry_hours:    { label: "Validité du token de validation certificat", hint: "Durée avant expiration du lien de validation envoyé à l'utilisateur.",               type: 'number', icon: <BadgeCheck size={14} className="text-teal-500"    />, unit: 'heures'    },
   password_reset_expiry_hours:      { label: "Validité du lien de réinitialisation",       hint: "Durée avant expiration du lien de réinitialisation de mot de passe.",                type: 'number', icon: <RotateCcw  size={14} className="text-slate-500"   />, unit: 'heures'    },
+  payment_amount:                   { label: "Prix du certificat numérique",                hint: "Montant en FCFA que l'utilisateur doit payer pour obtenir un certificat.",            type: 'number', icon: <CreditCard size={14} className="text-emerald-500" />, unit: 'FCFA'      },
 };
 
 const GROUPS = [
+  { title: 'Paiement',                  keys: ['payment_amount'] },
   { title: 'Récépissés',               keys: ['delai_expiration_defaut', 'entite_code'] },
   { title: 'Session & Authentification', keys: ['session_timeout_minutes', 'otp_expiry_minutes', 'two_fa_expiry_minutes', 'max_login_attempts'] },
   { title: 'Certificats',               keys: ['certificat_validite_defaut_jours', 'rappel_expiration_jours', 'validation_token_expiry_hours', 'password_reset_expiry_hours'] },
