@@ -2,9 +2,11 @@ package cm.gov.pki.controller;
 
 import cm.gov.pki.entity.CAConfiguration;
 import cm.gov.pki.entity.Certificate;
+import cm.gov.pki.entity.Parametre;
 import cm.gov.pki.repository.CAConfigurationRepository;
 import cm.gov.pki.repository.CertificateRepository;
 import cm.gov.pki.repository.CertificateRequestRepository;
+import cm.gov.pki.repository.ParametreRepository;
 import cm.gov.pki.repository.UserRepository;
 import cm.gov.pki.repository.AuditLogRepository;
 import cm.gov.pki.service.CAService;
@@ -38,6 +40,7 @@ public class AdminController {
 		private final EmailService emailService;
 		private final AuditService auditService;
 		private final AuditLogRepository auditLogRepository;
+		private final ParametreRepository parametreRepository;
 
 		private java.nio.file.Path uploadRoot() {
 			String configured = System.getenv("PKI_UPLOAD_DIR");
@@ -54,7 +57,8 @@ public class AdminController {
 						   CAService caService,
 						   EmailService emailService,
 						   AuditService auditService,
-						   AuditLogRepository auditLogRepository) {
+						   AuditLogRepository auditLogRepository,
+						   ParametreRepository parametreRepository) {
 		this.caConfigurationRepository = caConfigurationRepository;
 		this.userRepository = userRepository;
 		this.certificateRepository = certificateRepository;
@@ -63,6 +67,7 @@ public class AdminController {
 		this.emailService = emailService;
 		this.auditService = auditService;
 		this.auditLogRepository = auditLogRepository;
+		this.parametreRepository = parametreRepository;
 	}
 
 	@GetMapping({"/ca-status", "/ca/status"})
@@ -1043,5 +1048,34 @@ public class AdminController {
 			this.details = log.getDetails();
 			this.createdAt = log.getCreatedAt() != null ? log.getCreatedAt().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME) : null;
 		}
+	}
+
+	// ─── Paramètres de paiement (accessible à tous les admins) ───────────────
+
+	@GetMapping("/settings/payment")
+	public ResponseEntity<Map<String, String>> getPaymentSettings() {
+		String amount = parametreRepository.findById("payment_amount")
+				.map(cm.gov.pki.entity.Parametre::getValeur)
+				.orElse("5000");
+		return ResponseEntity.ok(Map.of("payment_amount", amount));
+	}
+
+	@PutMapping("/settings/payment")
+	public ResponseEntity<?> updatePaymentSettings(@RequestBody Map<String, String> body) {
+		String valeur = body.getOrDefault("payment_amount", "").trim();
+		if (valeur.isBlank()) {
+			return ResponseEntity.badRequest().body(Map.of("error", "Le montant ne peut pas être vide."));
+		}
+		try {
+			java.math.BigDecimal v = new java.math.BigDecimal(valeur);
+			if (v.compareTo(java.math.BigDecimal.ZERO) <= 0) throw new NumberFormatException();
+		} catch (NumberFormatException e) {
+			return ResponseEntity.badRequest().body(Map.of("error", "Le montant doit être un nombre positif."));
+		}
+		Parametre p = parametreRepository.findById("payment_amount")
+				.orElse(new Parametre("payment_amount", valeur, "Montant en FCFA requis pour obtenir un certificat numérique"));
+		p.setValeur(valeur);
+		parametreRepository.save(p);
+		return ResponseEntity.ok(Map.of("payment_amount", valeur));
 	}
 }
