@@ -137,21 +137,54 @@ def _extract_ocr_text(raw: bytes) -> str:
         return ""  # tesseract not available → filename-only classification
 
 
-def _classify(text: str, filename: str, expected_type: str) -> Dict:
+_GENERIC_PHOTO_NAMES = (
+    "pxl_", "img_", "dsc_", "dcim", "photo", "scan", "raw",
+    "cover", "image", "screenshot", "capture", "document",
+)
+
+def _classify(text: str, filename: str, expected_type: str, ocr_text_length: int = 0) -> Dict:
     cni_score = 0
     passport_score = 0
 
-    if _contains_any(filename, ("cni", "identite", "identity", "id_card", "national_id", "carte")):
+    fn = filename.lower()
+
+    # ── Nom de fichier ───────────────────────────────────────────────────────
+    if _contains_any(fn, ("cni", "identite", "identity", "id_card", "national_id", "carte")):
         cni_score += 2
-    if _contains_any(text, ("carte nationale", "carte d'identite", "national identity", "id card", "numero cni", "date de naissance")):
+    if _contains_any(fn, ("passport", "passeport", "mrz")):
+        passport_score += 2
+
+    # Nom générique de smartphone (PXL_, IMG_, raw, cover…) — impossible à classifier
+    # par le nom seul → score neutre 1 sur le type attendu pour que le fallback s'active
+    is_generic = _contains_any(fn, _GENERIC_PHOTO_NAMES)
+    if is_generic:
+        if expected_type == "CNI":
+            cni_score = max(cni_score, 1)
+        elif expected_type in {"PASSEPORT", "PASSPORT"}:
+            passport_score = max(passport_score, 1)
+
+    # ── Texte OCR : CNI ──────────────────────────────────────────────────────
+    cni_keywords = (
+        "carte nationale", "carte d'identite", "national identity card",
+        "national identity", "identity card", "id card",
+        "numero cni", "numero oni", "nic number",
+        "date de naissance", "date of birth",
+        "date de delivrance", "date of issue",
+        "republique du cameroun", "republic of cameroon",
+    )
+    if _contains_any(text, cni_keywords):
         cni_score += 4
 
-    if _contains_any(filename, ("passport", "passeport", "mrz")):
-        passport_score += 2
+    # MRZ TD1 (CNI) — commence par I< (ex. I<CMR pour Cameroun)
+    if re.search(r"i<[a-z]{3}", text) or "i<cmr" in text:
+        cni_score += 3
+
+    # ── Texte OCR : Passeport ────────────────────────────────────────────────
     if _contains_any(text, ("passport", "passeport", "travel document", "nationality", "date of expiry")):
         passport_score += 4
 
-    if "p<" in text:
+    # MRZ TD3 (passeport) — commence par P<
+    if re.search(r"p<[a-z]{3}", text) or "p<" in text:
         passport_score += 2
     if re.search(r"[a-z0-9<]{25,}", text):
         passport_score += 1
@@ -159,33 +192,46 @@ def _classify(text: str, filename: str, expected_type: str) -> Dict:
     cni_conf  = min(1.0, cni_score / 7.0)
     pass_conf = min(1.0, passport_score / 7.0)
 
-    label = "UNKNOWN"
-    accepted = False
+    label      = "UNKNOWN"
+    accepted   = False
     confidence = 0.0
-    message = "Document d'identite non detecte"
+    message    = "Document d'identite non detecte"
+
+    # ── Cas spécial : nom générique + OCR insuffisant + aucun indice passeport
+    # → impossible de conclure heuristiquement → on accepte avec faible confiance
+    # (le soft mode côté Java est déjà activé si le service est DOWN ; ici on
+    #  retourne accepted=True directement pour les images non identifiables)
+    if is_generic and ocr_text_length < 80 and passport_score == 0 and expected_type:
+        return {
+            "accepted":       True,
+            "confidence":     0.1,
+            "label":          expected_type,
+            "message":        "Analyse heuristique incertaine (nom générique, OCR insuffisant) — accepté en mode souple",
+            "scores":         {"cni": cni_score, "passport": passport_score},
+        }
 
     if expected_type == "CNI":
-        accepted   = cni_score >= 4 and cni_score >= passport_score
+        accepted   = cni_score >= 3 and cni_score >= passport_score
         confidence = cni_conf
         label      = "CNI" if accepted else "UNKNOWN"
         message    = "CNI detectee" if accepted else "Le document ne ressemble pas a une CNI"
     elif expected_type in {"PASSEPORT", "PASSPORT"}:
-        accepted   = passport_score >= 4 and passport_score >= cni_score
+        accepted   = passport_score >= 3 and passport_score >= cni_score
         confidence = pass_conf
         label      = "PASSEPORT" if accepted else "UNKNOWN"
         message    = "Passeport detecte" if accepted else "Le document ne ressemble pas a un passeport"
     else:
-        if cni_score >= passport_score and cni_score >= 4:
+        if cni_score >= passport_score and cni_score >= 3:
             accepted, confidence, label, message = True, cni_conf, "CNI", "Document d'identite detecte: CNI"
-        elif passport_score >= 4:
+        elif passport_score >= 3:
             accepted, confidence, label, message = True, pass_conf, "PASSEPORT", "Document d'identite detecte: PASSEPORT"
 
     return {
-        "accepted": accepted,
+        "accepted":   accepted,
         "confidence": round(float(confidence), 3),
-        "label": label,
-        "message": message,
-        "scores": {"cni": cni_score, "passport": passport_score},
+        "label":      label,
+        "message":    message,
+        "scores":     {"cni": cni_score, "passport": passport_score},
     }
 
 # ─── Face helpers ─────────────────────────────────────────────────────────────
@@ -277,12 +323,14 @@ async def validate_document(
         text = _extract_ocr_text(raw)
     except ValueError as ex:
         raise HTTPException(status_code=400, detail=str(ex)) from ex
+    ocr_len = len(text)
     result = _classify(
         text=text,
         filename=file.filename.lower(),
         expected_type=(expectedType or "").strip().upper(),
+        ocr_text_length=ocr_len,
     )
-    result["ocrTextLength"] = len(text)
+    result["ocrTextLength"] = ocr_len
     return result
 
 
