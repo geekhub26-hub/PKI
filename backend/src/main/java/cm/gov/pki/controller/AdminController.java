@@ -3,12 +3,13 @@ package cm.gov.pki.controller;
 import cm.gov.pki.entity.CAConfiguration;
 import cm.gov.pki.entity.Certificate;
 import cm.gov.pki.entity.Parametre;
+import cm.gov.pki.repository.AuditLogRepository;
 import cm.gov.pki.repository.CAConfigurationRepository;
 import cm.gov.pki.repository.CertificateRepository;
 import cm.gov.pki.repository.CertificateRequestRepository;
 import cm.gov.pki.repository.ParametreRepository;
+import cm.gov.pki.repository.RecepissRepository;
 import cm.gov.pki.repository.UserRepository;
-import cm.gov.pki.repository.AuditLogRepository;
 import cm.gov.pki.service.CAService;
 import cm.gov.pki.service.AuditService;
 import cm.gov.pki.service.EmailService;
@@ -41,6 +42,7 @@ public class AdminController {
 		private final AuditService auditService;
 		private final AuditLogRepository auditLogRepository;
 		private final ParametreRepository parametreRepository;
+		private final RecepissRepository recepissRepository;
 
 		private java.nio.file.Path uploadRoot() {
 			String configured = System.getenv("PKI_UPLOAD_DIR");
@@ -58,7 +60,8 @@ public class AdminController {
 						   EmailService emailService,
 						   AuditService auditService,
 						   AuditLogRepository auditLogRepository,
-						   ParametreRepository parametreRepository) {
+						   ParametreRepository parametreRepository,
+						   RecepissRepository recepissRepository) {
 		this.caConfigurationRepository = caConfigurationRepository;
 		this.userRepository = userRepository;
 		this.certificateRepository = certificateRepository;
@@ -68,6 +71,7 @@ public class AdminController {
 		this.auditService = auditService;
 		this.auditLogRepository = auditLogRepository;
 		this.parametreRepository = parametreRepository;
+		this.recepissRepository = recepissRepository;
 	}
 
 	@GetMapping({"/ca-status", "/ca/status"})
@@ -637,6 +641,7 @@ public class AdminController {
 		}
 	}
 
+	@Transactional
 	@PreAuthorize("hasRole('SUPER_ADMIN')")
 	@DeleteMapping("/users/{userId}")
 	public ResponseEntity<?> deleteUser(
@@ -665,25 +670,30 @@ public class AdminController {
 				log.info("Suppression d'utilisateur : {} par {}", userToDelete.getEmail(), admin.getEmail());
 			}
 
-			// Supprimer les données de l'utilisateur avant sa suppression
-			// Cela évite les contraintes de clé étrangère
+			// Détacher / supprimer toutes les entités liées avant de supprimer l'utilisateur
+			// pour respecter les contraintes de clé étrangère PostgreSQL.
+
+			// 1. Détacher audit_logs (conserver l'historique, juste anonymiser)
+			auditLogRepository.detachUser(userToDelete);
+
+			// 2. Anonymiser les récépissés (demandeur et agent)
+			recepissRepository.detachDemandeur(userToDelete);
+			recepissRepository.detachAgent(userToDelete);
+
+			// 3. Supprimer certificats et demandes
 			try {
-				// Supprimer tous les certificats de cet utilisateur
 				var userCertificates = certificateRepository.findByUserOrderByIssuedAtDesc(userToDelete);
 				if (userCertificates != null && !userCertificates.isEmpty()) {
 					certificateRepository.deleteAll(userCertificates);
 					log.info("Suppression de {} certificat(s) pour l'utilisateur {}", userCertificates.size(), userToDelete.getEmail());
 				}
-				
-				// Supprimer toutes les demandes de certificat de cet utilisateur
 				var userRequests = certificateRequestRepository.findByUserOrderBySubmittedAtDesc(userToDelete);
 				if (userRequests != null && !userRequests.isEmpty()) {
 					certificateRequestRepository.deleteAll(userRequests);
 					log.info("Suppression de {} demande(s) de certificat pour l'utilisateur {}", userRequests.size(), userToDelete.getEmail());
 				}
 			} catch (Exception e) {
-				log.warn("Erreur lors de la suppression des certificats de l'utilisateur {}: {}", userId, e.getMessage());
-				// Continuer malgré l'erreur pour essayer de supprimer l'utilisateur
+				log.warn("Erreur lors de la suppression des données de l'utilisateur {}: {}", userId, e.getMessage());
 			}
 
 			// Supprimer l'utilisateur

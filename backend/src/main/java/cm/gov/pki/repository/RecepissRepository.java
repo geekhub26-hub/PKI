@@ -1,8 +1,10 @@
 package cm.gov.pki.repository;
 
 import cm.gov.pki.entity.Recepisse;
+import cm.gov.pki.entity.User;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -51,4 +53,12 @@ public interface RecepissRepository extends JpaRepository<Recepisse, UUID> {
     // Top N agents AEL pour une entité
     @Query("SELECT r.agent.id, r.agent.firstName, r.agent.lastName, r.agent.email, COUNT(r) FROM Recepisse r WHERE r.agent IS NOT NULL AND r.agent.entite.id = :entiteId GROUP BY r.agent.id, r.agent.firstName, r.agent.lastName, r.agent.email ORDER BY COUNT(r) DESC")
     List<Object[]> top5AgentsForEntite(@Param("entiteId") UUID entiteId);
+
+    @Modifying
+    @Query("UPDATE Recepisse r SET r.demandeur = null WHERE r.demandeur = :user")
+    void detachDemandeur(@Param("user") User user);
+
+    @Modifying
+    @Query("UPDATE Recepisse r SET r.agent = null WHERE r.agent = :user")
+    void detachAgent(@Param("user") User user);
 }

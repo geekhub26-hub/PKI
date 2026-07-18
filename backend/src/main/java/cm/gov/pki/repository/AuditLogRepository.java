@@ -5,6 +5,9 @@ import cm.gov.pki.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -19,4 +22,8 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
     List<AuditLog> findByActionOrderByCreatedAtDesc(String action);
     List<AuditLog> findByCreatedAtBetweenOrderByCreatedAtDesc(LocalDateTime start, LocalDateTime end);
     boolean existsByActionAndEntityId(String action, UUID entityId);
+
+    @Modifying
+    @Query("UPDATE AuditLog a SET a.user = null WHERE a.user = :user")
+    void detachUser(@Param("user") User user);
 }
