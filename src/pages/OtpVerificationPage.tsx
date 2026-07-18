@@ -3,8 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ShieldCheck, RefreshCw, ChevronLeft } from 'lucide-react';
 import { useThemeStore } from '../stores/themeStore';
 import { Moon, Sun } from 'lucide-react';
-
-const API = (import.meta as any).env.VITE_API_URL?.replace('/api', '') || 'http://localhost:8080';
+import { authService } from '../services/api';
 
 export default function OtpVerificationPage() {
   const navigate = useNavigate();
@@ -56,17 +55,10 @@ export default function OtpVerificationPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API}/auth/verify-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Code invalide');
-      // Auto-login après vérification : rediriger vers login
+      await authService.verifyOtp(email, code);
       navigate('/login?verified=1', { replace: true });
     } catch (e: any) {
-      setError(e.message);
+      setError(e?.response?.data?.error || e?.message || 'Code invalide ou expiré.');
     } finally {
       setLoading(false);
     }
@@ -76,13 +68,11 @@ export default function OtpVerificationPage() {
     setResending(true);
     setResent(false);
     try {
-      await fetch(`${API}/auth/resend-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
+      await authService.resendOtp(email);
       setResent(true);
       setTimeout(() => setResent(false), 4000);
+    } catch {
+      // silence — l'email peut avoir déjà été renvoyé
     } finally {
       setResending(false);
     }
