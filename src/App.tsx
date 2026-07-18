@@ -35,6 +35,8 @@ import AdminEntitesPage from './pages/AdminEntitesPage';
 import AdminSettingsPage from './pages/AdminSettingsPage';
 import AdminPaymentsPage from './pages/AdminPaymentsPage';
 import OtpVerificationPage from './pages/OtpVerificationPage';
+import ConditionsGeneralesPage from './pages/ConditionsGeneralesPage';
+import PolitiqueConfidentialitePage from './pages/PolitiqueConfidentialitePage';
 import { AdminRequestDetail, AdminRequestsList, UserRequestsPage } from './pages';
 import { userService } from './services/api';
 import { useAuthStore } from './stores/authStore';
@@ -120,6 +122,8 @@ function App() {
           <Route path="/verify" element={<VerifyPage />} />
           <Route path="/verify-email" element={<OtpVerificationPage />} />
           <Route path="/success" element={<SuccessPage />} />
+          <Route path="/conditions-generales" element={<ConditionsGeneralesPage />} />
+          <Route path="/politique-confidentialite" element={<PolitiqueConfidentialitePage />} />
 
           <Route
             element={

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import * as tmImage from '@teachablemachine/image';
 import {
   Camera, RefreshCw, CheckCircle, User, Building2,
@@ -25,6 +25,7 @@ export default function UserGenerateCsrPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const selfieUploadRef = useRef<HTMLInputElement | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -174,15 +175,42 @@ export default function UserGenerateCsrPage() {
 
   const startCamera = async () => {
     setCameraError(null); setVideoReady(false);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
-      });
-      streamRef.current = stream;
-      setCameraActive(true);
-    } catch {
-      setCameraError("Impossible d'accéder à la caméra. Vérifiez les permissions du navigateur.");
+    const constraintsList = [
+      { video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' } },
+      { video: { width: { ideal: 640 }, height: { ideal: 480 } } },
+      { video: true },
+    ];
+    for (const constraints of constraintsList) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        streamRef.current = stream;
+        setCameraActive(true);
+        return;
+      } catch (err: any) {
+        const name: string = err?.name || '';
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+          setCameraError("Accès refusé. Cliquez sur l'icône 🔒 dans la barre d'adresse du navigateur → autorisez la caméra → rechargez la page. Ou uploadez une photo ci-dessous.");
+          return;
+        }
+        if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+          setCameraError("Aucune caméra détectée sur cet appareil. Uploadez une photo de selfie ci-dessous.");
+          return;
+        }
+        // OverconstrainedError / NotReadableError → on essaie les contraintes suivantes
+      }
     }
+    setCameraError("La caméra est inaccessible. Elle est peut-être utilisée par une autre application (Zoom, Teams…). Fermez-les et réessayez, ou uploadez une photo de selfie ci-dessous.");
+  };
+
+  const onSelfieUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (selfiePreviewUrl) URL.revokeObjectURL(selfiePreviewUrl);
+    const url = URL.createObjectURL(f);
+    setSelfieFile(f);
+    setSelfiePreviewUrl(url);
+    setCameraError(null);
+    if (selfieUploadRef.current) selfieUploadRef.current.value = '';
   };
 
   useEffect(() => {
@@ -750,7 +778,28 @@ export default function UserGenerateCsrPage() {
             )}
 
             {cameraError && (
-              <p className="mt-2 text-sm text-red-600 dark:text-red-400">{cameraError}</p>
+              <div className="mt-3 space-y-3">
+                <p className="text-sm text-red-600 dark:text-red-400">{cameraError}</p>
+                <div>
+                  <p className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+                    Alternative — uploadez une photo de selfie :
+                  </p>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={selfieUploadRef}
+                    onChange={onSelfieUpload}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => selfieUploadRef.current?.click()}
+                    className="btn btn-primary flex items-center gap-2"
+                  >
+                    <Upload size={14} /> Choisir une photo de selfie
+                  </button>
+                </div>
+              </div>
             )}
 
             {cameraActive && (
@@ -927,8 +976,10 @@ export default function UserGenerateCsrPage() {
           />
           <label htmlFor="cgu" className="cursor-pointer text-sm text-slate-600 dark:text-slate-400">
             J'ai lu et j'accepte les{' '}
-            <span className="font-semibold text-blue-700 dark:text-blue-400">Conditions Générales d'Utilisation</span>{' '}
-            et la <span className="font-semibold text-blue-700 dark:text-blue-400">Politique de Confidentialité</span> de la plateforme ANTIC PKI.
+            <Link to="/conditions-generales" target="_blank" className="font-semibold text-blue-700 underline hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-200">Conditions Générales d'Utilisation</Link>{' '}
+            et la{' '}
+            <Link to="/politique-confidentialite" target="_blank" className="font-semibold text-blue-700 underline hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-200">Politique de Confidentialité</Link>{' '}
+            de la plateforme ANTIC PKI.
           </label>
         </div>
       )}

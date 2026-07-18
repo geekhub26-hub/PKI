@@ -204,9 +204,9 @@ export default function RegisterPage() {
               />
               <label htmlFor="terms" className="cursor-pointer text-sm text-gray-500 dark:text-gray-400">
                 En créant un compte, vous acceptez les{' '}
-                <span className="font-medium text-gray-800 dark:text-white/90">Conditions générales</span>{' '}
+                <Link to="/conditions-generales" target="_blank" className="font-medium text-primary-600 underline hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">Conditions générales d'utilisation</Link>{' '}
                 et notre{' '}
-                <span className="font-medium text-gray-800 dark:text-white/90">Politique de confidentialité</span>.
+                <Link to="/politique-confidentialite" target="_blank" className="font-medium text-primary-600 underline hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">Politique de confidentialité</Link>.
               </label>
             </div>
 
