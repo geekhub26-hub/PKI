@@ -246,6 +246,7 @@ public class RecepissService {
     }
 
     /** Retourne les bytes du PDF d'un récépissé. */
+    @Transactional(readOnly = true)
     public byte[] getPdfBytes(UUID recepissId) throws IOException {
         Recepisse rec = recepissRepository.findById(recepissId)
                 .orElseThrow(() -> new IllegalArgumentException("Récépissé introuvable"));
@@ -261,6 +262,7 @@ public class RecepissService {
         }
     }
 
+    @Transactional(readOnly = true)
     public byte[] getSignedPdfBytes(UUID recepissId) throws Exception {
         return pdfSigningService.sign(getPdfBytes(recepissId));
     }
