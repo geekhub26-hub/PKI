@@ -25,7 +25,7 @@ export default function UserGenerateCsrPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const selfieUploadRef = useRef<HTMLInputElement | null>(null);
+  const [fileUrls, setFileUrls] = useState<Record<string, string>>({});
   const [dragOver, setDragOver] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -162,6 +162,11 @@ export default function UserGenerateCsrPage() {
         setError(`Seules les pièces CNI/Passeport sont acceptées. Fichiers non valides: ${invalid.join(', ')}`);
       }
       setFiles((prev) => [...prev, ...accepted].slice(0, 5));
+      const newUrls: Record<string, string> = {};
+      for (const f of accepted) {
+        if (f.type !== 'application/pdf') newUrls[fileKey(f)] = URL.createObjectURL(f);
+      }
+      if (Object.keys(newUrls).length) setFileUrls((prev) => ({ ...prev, ...newUrls }));
     },
     [aiModel, aiStatus]
   );
@@ -202,16 +207,6 @@ export default function UserGenerateCsrPage() {
     setCameraError("La caméra est inaccessible. Elle est peut-être utilisée par une autre application (Zoom, Teams…). Fermez-les et réessayez, ou uploadez une photo de selfie ci-dessous.");
   };
 
-  const onSelfieUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    if (selfiePreviewUrl) URL.revokeObjectURL(selfiePreviewUrl);
-    const url = URL.createObjectURL(f);
-    setSelfieFile(f);
-    setSelfiePreviewUrl(url);
-    setCameraError(null);
-    if (selfieUploadRef.current) selfieUploadRef.current.value = '';
-  };
 
   useEffect(() => {
     if (cameraActive && streamRef.current && videoRef.current) {
@@ -351,6 +346,7 @@ export default function UserGenerateCsrPage() {
   useEffect(() => () => {
     stopCamera();
     if (selfiePreviewUrl) URL.revokeObjectURL(selfiePreviewUrl);
+    Object.values(fileUrls).forEach((u) => URL.revokeObjectURL(u));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -365,12 +361,16 @@ export default function UserGenerateCsrPage() {
 
   const removeFile = (idx: number) =>
     setFiles((prev) => {
-      const next = prev.filter((_, i) => i !== idx);
       const removed = prev[idx];
       if (removed) {
         setAiResults((curr) => { const copy = { ...curr }; delete copy[fileKey(removed)]; return copy; });
+        setFileUrls((curr) => {
+          const key = fileKey(removed);
+          if (curr[key]) URL.revokeObjectURL(curr[key]);
+          const copy = { ...curr }; delete copy[key]; return copy;
+        });
       }
-      return next;
+      return prev.filter((_, i) => i !== idx);
     });
   const removeCsrFile = () => setCsrFile(null);
 
@@ -680,33 +680,54 @@ export default function UserGenerateCsrPage() {
                 const ai = aiResults[fileKey(f)];
                 const isCni = needsVerso || ai?.label.toLowerCase().includes('cni');
                 const sideLabel = isCni ? (idx === 0 ? 'RECTO' : 'VERSO') : null;
+                const previewUrl = fileUrls[fileKey(f)];
                 return (
-                  <div key={idx} className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <FileText size={14} className="shrink-0 text-slate-400" />
-                      {sideLabel && (
-                        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                          idx === 0
-                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                            : 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'
-                        }`}>
-                          {sideLabel}
-                        </span>
+                  <div key={idx} className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-2.5">
+                    {/* Miniature cliquable */}
+                    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+                      {previewUrl ? (
+                        <img
+                          src={previewUrl}
+                          alt={f.name}
+                          title="Cliquer pour agrandir"
+                          className="h-full w-full cursor-zoom-in object-cover"
+                          onClick={() => window.open(previewUrl, '_blank')}
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center">
+                          <FileText size={22} className="text-slate-400" />
+                        </div>
                       )}
-                      <span className="truncate text-sm text-slate-700 dark:text-slate-300">{f.name}</span>
-                      <span className="text-xs text-slate-400">({Math.round(f.size / 1024)} KB)</span>
-                      {ai && (
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
-                          ai.ok ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
-                               : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                        }`}>
-                          {ai.label} — {Math.round(ai.score * 100)}%
-                        </span>
-                      )}
+                    </div>
+                    {/* Infos */}
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {sideLabel && (
+                          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                            idx === 0
+                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                              : 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'
+                          }`}>
+                            {sideLabel}
+                          </span>
+                        )}
+                        <span className="truncate text-sm font-medium text-slate-700 dark:text-slate-300">{f.name}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-slate-400">{Math.round(f.size / 1024)} KB</span>
+                        {ai && (
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            ai.ok ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                                 : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                          }`}>
+                            {ai.label} — {Math.round(ai.score * 100)}%
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); removeFile(idx); }}
-                      className="ml-3 shrink-0 text-xs font-semibold text-rose-600 hover:text-rose-800"
+                      className="ml-1 shrink-0 text-xs font-semibold text-rose-600 hover:text-rose-800"
                     >
                       Supprimer
                     </button>
@@ -778,28 +799,7 @@ export default function UserGenerateCsrPage() {
             )}
 
             {cameraError && (
-              <div className="mt-3 space-y-3">
-                <p className="text-sm text-red-600 dark:text-red-400">{cameraError}</p>
-                <div>
-                  <p className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">
-                    Alternative — uploadez une photo de selfie :
-                  </p>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    ref={selfieUploadRef}
-                    onChange={onSelfieUpload}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => selfieUploadRef.current?.click()}
-                    className="btn btn-primary flex items-center gap-2"
-                  >
-                    <Upload size={14} /> Choisir une photo de selfie
-                  </button>
-                </div>
-              </div>
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400">{cameraError}</p>
             )}
 
             {cameraActive && (
