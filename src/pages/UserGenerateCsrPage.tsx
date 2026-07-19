@@ -192,8 +192,7 @@ export default function UserGenerateCsrPage() {
     const score = best?.probability ?? 0;
     const normalized = label.toLowerCase();
     const isAllowed = ['cni', 'passport', 'passeport'].some((v) => normalized.includes(v));
-    // Seuil à 90 % — les 5 heuristiques pixel font le gros du travail ;
-    // le verso CNI (QR code + MRZ, pas de visage) score 85-92 % sur un modèle entraîné recto.
+    // score utilisé pour l'affichage du badge et l'auto-détection du type, pas pour le rejet
     const ok = isAllowed && score >= 0.90;
     return { label, score, ok };
   };
@@ -224,19 +223,18 @@ export default function UserGenerateCsrPage() {
           invalid.push(`${file.name} (photo de personne ou objet — joignez une photo de votre pièce d'identité)`);
           continue;
         }
-        if (aiStatus !== 'ready' || !aiModel) {
-          invalid.push(`${file.name} (modèle IA indisponible)`); continue;
+        // TM model : détection du type uniquement, pas de rejet (pixel heuristic suffit)
+        if (aiStatus === 'ready' && aiModel) {
+          try {
+            const result = await validateWithAi(file);
+            nextResults[fileKey(file)] = { ...result, ok: true };
+          } catch {
+            nextResults[fileKey(file)] = { label: 'DOCUMENT', score: 1, ok: true };
+          }
+        } else {
+          nextResults[fileKey(file)] = { label: 'DOCUMENT', score: 1, ok: true };
         }
-        try {
-          // 2e filtre : modèle Teachable Machine (seuil 94 %)
-          const result = await validateWithAi(file);
-          nextResults[fileKey(file)] = result;
-          if (result.ok) accepted.push(file);
-          else invalid.push(`${file.name} (pièce non reconnue — CNI ou Passeport requis)`);
-        } catch {
-          nextResults[fileKey(file)] = { label: 'UNKNOWN', score: 0, ok: false };
-          invalid.push(file.name);
-        }
+        accepted.push(file);
       }
 
       if (reqId !== aiRequestIdRef.current) return;
