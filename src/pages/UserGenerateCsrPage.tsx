@@ -242,8 +242,9 @@ export default function UserGenerateCsrPage() {
     const score = best?.probability ?? 0;
     const normalized = label.toLowerCase();
     const isAllowed = ['cni', 'passport', 'passeport'].some((v) => normalized.includes(v));
-    // Seuil relevé à 94 % (modèle binaire, 80 % insuffisant)
-    const ok = isAllowed && score >= 0.97;
+    // Seuil à 93 % — les 5 heuristiques pixel font le gros du travail ;
+    // le verso CNI (QR code + MRZ) score souvent 85-95 % sur un modèle entraîné recto.
+    const ok = isAllowed && score >= 0.93;
     return { label, score, ok };
   };
 
