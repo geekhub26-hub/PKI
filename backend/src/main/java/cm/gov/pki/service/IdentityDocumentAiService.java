@@ -253,8 +253,11 @@ public class IdentityDocumentAiService {
                 "pxl_", "pxl-", "img_", "img-", "dsc_", "dsc-", "dcim", "photo", "scan", "raw", "cover",
                 "image", "screenshot", "capture", "document");
         if (isGenericName) {
-            if ("CNI".equals(expectedType))       cniScore      = Math.max(cniScore,      1);
-            if ("PASSEPORT".equals(expectedType)) passportScore = Math.max(passportScore, 1);
+            // Photos de smartphone (IMG-*, PXL-*, etc.) : le nom de fichier ne contient aucun mot-clé
+            // d'identité. Le TM model côté frontend a déjà validé le type ; on fait confiance au type
+            // déclaré et on porte le score à 3 pour passer même en mode strict.
+            if ("CNI".equals(expectedType))       cniScore      = Math.max(cniScore,      3);
+            if ("PASSEPORT".equals(expectedType)) passportScore = Math.max(passportScore, 3);
         }
 
         double cniConfidence      = Math.min(1.0, cniScore / 6.0);
