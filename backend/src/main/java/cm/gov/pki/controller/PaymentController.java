@@ -275,9 +275,11 @@ public class PaymentController {
             return ResponseEntity.status(404).body(Map.of("error", "Demande introuvable."));
         }
         CertificateRequest req = opt.get();
-        if (!"AWAITING_PAYMENT".equalsIgnoreCase(req.getStatus())) {
+        String currentStatus = req.getStatus() == null ? "" : req.getStatus().toUpperCase();
+        boolean canConfirm = "AWAITING_PAYMENT".equals(currentStatus) || "REVIEW_APPROVED".equals(currentStatus);
+        if (!canConfirm) {
             return ResponseEntity.status(400).body(Map.of(
-                    "error", "Cette demande n'est pas en attente de paiement (statut : " + req.getStatus() + ")."));
+                    "error", "Impossible de confirmer le paiement : statut actuel '" + req.getStatus() + "' (attendu : AWAITING_PAYMENT ou REVIEW_APPROVED)."));
         }
 
         req.setStatus("PAYMENT_CONFIRMED");

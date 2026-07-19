@@ -22,6 +22,7 @@ import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -382,6 +383,7 @@ public class UserController {
     /**
      * Etape 3: soumission CSR apres validation admin.
      */
+    @Transactional
     @PostMapping(value = "/certificate-requests/{id}/submit-csr", consumes = {"multipart/form-data"})
     public ResponseEntity<?> submitCsrAfterReview(
             Authentication authentication,
@@ -425,6 +427,7 @@ public class UserController {
     /**
      * Etape 3 (alternative): generation serveur d'une CSR puis soumission directe.
      */
+    @Transactional
     @PostMapping("/certificate-requests/{id}/generate-csr")
     public ResponseEntity<?> generateAndSubmitCsr(
             Authentication authentication,
