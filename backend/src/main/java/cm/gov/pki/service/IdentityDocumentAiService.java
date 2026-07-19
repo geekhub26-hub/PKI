@@ -250,7 +250,7 @@ public class IdentityDocumentAiService {
         // (PXL_, IMG_, DSC_, DCIM, raw, cover, scan, photo…) → on ne peut pas exclure heuristiquement
         // On donne 1 point neutre au type attendu pour que le mode souple puisse s'activer (confidence > 0)
         boolean isGenericName = containsAny(fileName,
-                "pxl_", "img_", "dsc_", "dcim", "photo", "scan", "raw", "cover",
+                "pxl_", "pxl-", "img_", "img-", "dsc_", "dsc-", "dcim", "photo", "scan", "raw", "cover",
                 "image", "screenshot", "capture", "document");
         if (isGenericName) {
             if ("CNI".equals(expectedType))       cniScore      = Math.max(cniScore,      1);
