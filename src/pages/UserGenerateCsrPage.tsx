@@ -14,12 +14,14 @@ import { notify } from '../utils/notify';
 
 // Vérifie si l'image ressemble à un document d'identité (CNI / Passeport).
 // Le modèle TM est binaire CNI/PASSPORT : TOUTE image est classée comme l'une d'elles.
-// Trois heuristiques pixel appliquées avant le modèle TM :
-//   1. Tons chair dominants (> 45 %)  → selfie / photo de personne → rejeté
-//   2. Pixels très saturés (> 60 %)   → nourriture / objet coloré  → rejeté
-//   3. Runs identiques horizontaux (> 28 %) → capture d'écran / image générée → rejeté
-//      Les vraies photos ont du bruit capteur → peu de pixels adjacents strictement identiques.
-//      Les captures d'écran ont de larges plages de couleur uniforme → beaucoup de runs.
+// Cinq heuristiques pixel appliquées avant le modèle TM :
+//   1. Tons chair dominants (> 38 %)       → selfie / gros plan visage
+//   2. Pixels très saturés (> 55 %)        → nourriture / objet coloré / flyer vif
+//   3. Runs identiques horizontaux (> 23 %) → capture d'écran / image numérique synthétique
+//   4. Blanc quasi-pur dominant (> 70 %)   → feuille de papier photographiée (PV, relevé, facture…)
+//      Les vraies CNI ont un fond beige/vert + photo : rarement > 50 % de blanc pur.
+//   5. Format portrait + peau (ratio < 0.85 et peau > 14 %) → photo plein corps d'une personne
+//      Une CNI est en paysage ; un passeport a très peu de zone-peau (< 12 %).
 const isLikelyDocument = (file: File): Promise<boolean> =>
   new Promise((resolve) => {
     const url = URL.createObjectURL(file);
@@ -27,14 +29,18 @@ const isLikelyDocument = (file: File): Promise<boolean> =>
     img.onload = () => {
       URL.revokeObjectURL(url);
       const cv = document.createElement('canvas');
-      const size = 200; // résolution plus haute pour mieux détecter les screenshots
+      const size = 200;
       cv.width = cv.height = size;
       const ctx = cv.getContext('2d');
       if (!ctx) { resolve(true); return; }
+
+      const aspectRatio = img.naturalWidth / img.naturalHeight;
+
       ctx.drawImage(img, 0, 0, size, size);
       const { data } = ctx.getImageData(0, 0, size, size);
       const total = size * size;
-      let skinPixels = 0, colorfulPixels = 0, identicalHPairs = 0;
+      let skinPixels = 0, colorfulPixels = 0, identicalHPairs = 0, nearWhitePixels = 0;
+
       for (let i = 0; i < data.length; i += 4) {
         const r = data[i], g = data[i + 1], b = data[i + 2];
 
@@ -43,28 +49,32 @@ const isLikelyDocument = (file: File): Promise<boolean> =>
           && (r - Math.min(g, b)) > 20 && Math.abs(g - b) < 80;
         if (isSkin) skinPixels++;
 
-        // Check 2 — très saturé
+        // Check 2 — très saturé (flyer coloré, nourriture…)
         const max = Math.max(r, g, b), min = Math.min(r, g, b);
         if (max > 0 && (max - min) / max > 0.55 && max > 100) colorfulPixels++;
 
-        // Check 3 — paire horizontale strictement identique (noise absent → screenshot)
-        // On ne teste pas les derniers pixels de chaque ligne
+        // Check 3 — blanc quasi-pur (papier imprimé photographié)
+        if (r > 210 && g > 210 && b > 210) nearWhitePixels++;
+
+        // Check 4 — paire horizontale strictement identique (no bruit capteur → image numérique)
         const col = (i / 4) % size;
         if (col < size - 1) {
           const j = i + 4;
-          if (data[i] === data[j] && data[i + 1] === data[j + 1] && data[i + 2] === data[j + 2]) {
+          if (data[i] === data[j] && data[i + 1] === data[j + 1] && data[i + 2] === data[j + 2])
             identicalHPairs++;
-          }
         }
       }
 
       const skinRatio      = skinPixels / total;
       const colorRatio     = colorfulPixels / total;
       const identicalRatio = identicalHPairs / (size * (size - 1));
+      const nearWhiteRatio = nearWhitePixels / total;
 
-      if (skinRatio >= 0.45)      { resolve(false); return; } // selfie / personne
-      if (colorRatio >= 0.60)     { resolve(false); return; } // nourriture / objet
-      if (identicalRatio >= 0.28) { resolve(false); return; } // capture d'écran / image synthétique
+      if (skinRatio >= 0.38)                              { resolve(false); return; } // selfie / gros plan
+      if (colorRatio >= 0.55)                             { resolve(false); return; } // objet coloré / flyer
+      if (identicalRatio >= 0.23)                         { resolve(false); return; } // screenshot / image digitale
+      if (nearWhiteRatio >= 0.70)                         { resolve(false); return; } // feuille de papier (PV, facture…)
+      if (aspectRatio < 0.85 && skinRatio >= 0.14)        { resolve(false); return; } // portrait plein corps d'une personne
       resolve(true);
     };
     img.onerror = () => { URL.revokeObjectURL(url); resolve(true); };
