@@ -122,8 +122,7 @@ export default function UserGenerateCsrPage() {
     const score = best?.probability ?? 0;
     const normalized = label.toLowerCase();
     const isAllowed = ['cni', 'passport', 'passeport'].some((v) => normalized.includes(v));
-    // score utilisé pour l'affichage du badge et l'auto-détection du type, pas pour le rejet
-    const ok = isAllowed && score >= 0.90;
+    const ok = isAllowed && score >= 0.60;
     return { label, score, ok };
   };
 
@@ -146,18 +145,25 @@ export default function UserGenerateCsrPage() {
           nextResults[fileKey(file)] = { label: 'PDF', score: 1, ok: true };
           accepted.push(file); continue;
         }
-        // TM model : détection du type uniquement (CNI / PASSEPORT), le backend valide le contenu
         if (aiStatus === 'ready' && aiModel) {
           try {
             const result = await validateWithAi(file);
-            nextResults[fileKey(file)] = { ...result, ok: true };
+            if (result.ok) {
+              nextResults[fileKey(file)] = result;
+              accepted.push(file);
+            } else {
+              invalid.push(`${file.name} — pièce non reconnue (CNI ou Passeport requis, confiance trop faible)`);
+            }
           } catch {
+            // Modèle indisponible : on accepte sans filtrer
             nextResults[fileKey(file)] = { label: 'DOCUMENT', score: 1, ok: true };
+            accepted.push(file);
           }
         } else {
+          // Modèle non chargé : on accepte sans filtrer
           nextResults[fileKey(file)] = { label: 'DOCUMENT', score: 1, ok: true };
+          accepted.push(file);
         }
-        accepted.push(file);
       }
 
       if (reqId !== aiRequestIdRef.current) return;
