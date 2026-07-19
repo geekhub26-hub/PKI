@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import * as tmImage from '@teachablemachine/image';
-import * as faceapi from 'face-api.js';
 import {
   Camera, RefreshCw, CheckCircle, User, Building2,
-  CreditCard, FileText, KeyRound, Upload, AlertTriangle, ScanFace,
+  CreditCard, FileText, KeyRound, Upload, AlertTriangle,
 } from 'lucide-react';
 import { userService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
@@ -128,10 +127,6 @@ export default function UserGenerateCsrPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const csrFileRef = useRef<HTMLInputElement | null>(null);
 
-  // Face comparison state
-  const [faceModelsReady, setFaceModelsReady] = useState(false);
-  const selfieDescriptorRef = useRef<Float32Array | null>(null);
-  const [faceCompareResult, setFaceCompareResult] = useState<'match' | 'mismatch' | 'no_face_id' | 'comparing' | null>(null);
 
   // Auto-selfie state
   const [faceDetected, setFaceDetected] = useState(false);
@@ -174,15 +169,6 @@ export default function UserGenerateCsrPage() {
   }, []);
 
   // Charger les modèles face-api.js (TinyFaceDetector + FaceRecognitionNet)
-  useEffect(() => {
-    const MODEL_URL = '/ai/face';
-    Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-      faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
-      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-    ]).then(() => setFaceModelsReady(true)).catch(() => {});
-  }, []);
-
   const fileKey = (f: File) => `${f.name}-${f.size}-${f.lastModified}`;
 
   const loadImage = (file: File) =>
@@ -193,42 +179,6 @@ export default function UserGenerateCsrPage() {
       img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image invalide')); };
       img.src = url;
     });
-
-  // Extrait le descripteur facial (requiert landmarks model)
-  const extractFaceDescriptor = async (
-    source: HTMLImageElement | HTMLCanvasElement
-  ): Promise<Float32Array | null> => {
-    if (!faceModelsReady) return null;
-    const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 });
-    const det = await faceapi
-      .detectSingleFace(source, opts)
-      .withFaceLandmarks(true)   // true = tiny model
-      .withFaceDescriptor();
-    return det?.descriptor ?? null;
-  };
-
-  // Lance la comparaison selfie ↔ pièces d'identité (appel différé car async)
-  const runFaceComparison = useCallback(async (
-    selfiDesc: Float32Array,
-    idFiles: File[]
-  ) => {
-    for (const f of idFiles) {
-      if (f.type === 'application/pdf') continue;
-      try {
-        const img = await loadImage(f);
-        const idDesc = await extractFaceDescriptor(img);
-        if (idDesc) {
-          const dist = faceapi.euclideanDistance(
-            Array.from(selfiDesc), Array.from(idDesc)
-          );
-          setFaceCompareResult(dist < 0.52 ? 'match' : 'mismatch');
-          return;
-        }
-      } catch { /* image non lisible, on continue */ }
-    }
-    setFaceCompareResult('no_face_id');
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [faceModelsReady]);
 
   const validateWithAi = async (file: File) => {
     if (!aiModel) throw new Error('Modèle non disponible');
@@ -303,16 +253,7 @@ export default function UserGenerateCsrPage() {
       if (invalid.length) {
         setError(invalid.join(' | '));
       }
-      setFiles((prev) => {
-        const next = [...prev, ...accepted].slice(0, 5);
-        // Déclencher comparaison faciale si le selfie est déjà capturé
-        const desc = selfieDescriptorRef.current;
-        if (desc && accepted.some((f) => f.type !== 'application/pdf')) {
-          setFaceCompareResult('comparing');
-          runFaceComparison(desc, next);
-        }
-        return next;
-      });
+      setFiles((prev) => [...prev, ...accepted].slice(0, 5));
       const newUrls: Record<string, string> = {};
       for (const f of accepted) {
         if (f.type !== 'application/pdf') newUrls[fileKey(f)] = URL.createObjectURL(f);
@@ -320,7 +261,7 @@ export default function UserGenerateCsrPage() {
       if (Object.keys(newUrls).length) setFileUrls((prev) => ({ ...prev, ...newUrls }));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [aiModel, aiStatus, runFaceComparison]
+    [aiModel, aiStatus]
   );
 
   const onDrop = useCallback(
@@ -486,19 +427,6 @@ export default function UserGenerateCsrPage() {
         setSelfiePreviewUrl(url);
         stopCamera();
         // Extraire le descripteur facial du selfie capturé
-        selfieDescriptorRef.current = null;
-        setFaceCompareResult(null);
-        extractFaceDescriptor(canvas).then((desc) => {
-          selfieDescriptorRef.current = desc;
-          // Comparer avec les pièces d'identité déjà uploadées
-          setFiles((prev) => {
-            if (desc && prev.some((f) => f.type !== 'application/pdf')) {
-              setFaceCompareResult('comparing');
-              runFaceComparison(desc, prev);
-            }
-            return prev;
-          });
-        });
       }, 'image/jpeg', 0.92);
     });
   };
@@ -506,8 +434,6 @@ export default function UserGenerateCsrPage() {
   const retakeSelfie = () => {
     if (selfiePreviewUrl) URL.revokeObjectURL(selfiePreviewUrl);
     setSelfiePreviewUrl(null); setSelfieFile(null);
-    selfieDescriptorRef.current = null;
-    setFaceCompareResult(null);
     startCamera();
   };
 
@@ -569,9 +495,7 @@ export default function UserGenerateCsrPage() {
     if (files.length === 0) return "Veuillez ajouter au moins une pièce d'identité avant de continuer.";
     if (needsVerso && files.length < 2)
       return 'La CNI doit être soumise recto ET verso. Ajoutez la face arrière de la carte.';
-    if (!selfieFile) return 'Veuillez ajouter un selfie pour la comparaison faciale.';
-    if (faceCompareResult === 'comparing') return 'Comparaison faciale en cours, veuillez patienter…';
-    if (faceCompareResult === 'mismatch') return 'Le selfie ne correspond pas à la pièce d\'identité fournie. Reprenez le selfie.';
+    if (!selfieFile) return 'Veuillez ajouter un selfie pour la vérification d\'identité.';
     return null;
   };
 
@@ -693,29 +617,15 @@ export default function UserGenerateCsrPage() {
               <div className="absolute inset-0 rounded-full border-4 border-blue-100 dark:border-blue-900" />
               <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-blue-500" />
               <div className="absolute inset-0 flex items-center justify-center">
-                <ScanFace size={22} className="text-blue-500" />
+                <Upload size={22} className="text-blue-500" />
               </div>
             </div>
-            {selfieFile ? (
-              <>
-                <p className="text-base font-bold text-slate-800 dark:text-slate-100">
-                  Comparaison faciale en cours…
-                </p>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Le système vérifie que votre selfie correspond à votre pièce d'identité.
-                  Cela peut prendre quelques secondes.
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-base font-bold text-slate-800 dark:text-slate-100">
-                  Envoi de votre demande…
-                </p>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Validation des documents en cours.
-                </p>
-              </>
-            )}
+            <p className="text-base font-bold text-slate-800 dark:text-slate-100">
+              Envoi de votre demande…
+            </p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Validation des documents en cours.
+            </p>
             <div className="flex gap-1.5 pt-1">
               {[0, 1, 2].map((i) => (
                 <div
@@ -946,20 +856,8 @@ export default function UserGenerateCsrPage() {
               {selfieFile && <span className="status-badge status-active">Capturé</span>}
             </div>
 
-            {/* Indicateur de comparaison faciale */}
-            <div className="mb-4 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800/40 dark:bg-blue-950/30">
-              <ScanFace size={18} className="mt-0.5 shrink-0 text-blue-600 dark:text-blue-400" />
-              <div>
-                <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Comparaison faciale automatique</p>
-                <p className="mt-0.5 text-xs text-blue-700 dark:text-blue-400">
-                  Votre selfie sera comparé au visage sur votre pièce d'identité par le système.
-                  Regardez bien la caméra, visage face à l'objectif, sans lunettes ni masque.
-                </p>
-              </div>
-            </div>
-
             <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-              Prenez un selfie avec votre caméra. Veillez à ce que votre visage soit bien éclairé et centré.
+              Prenez un selfie avec votre caméra. Veillez à ce que votre visage soit bien éclairé, centré et face à l'objectif.
             </p>
 
             {!cameraActive && !selfiePreviewUrl && (
@@ -1044,32 +942,6 @@ export default function UserGenerateCsrPage() {
                     <CheckCircle size={12} /> Selfie capturé
                   </span>
                 </div>
-
-                {/* Résultat comparaison faciale */}
-                {faceCompareResult === 'comparing' && (
-                  <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800/40 dark:bg-blue-950/30 dark:text-blue-300">
-                    <RefreshCw size={15} className="animate-spin shrink-0" />
-                    Comparaison faciale en cours…
-                  </div>
-                )}
-                {faceCompareResult === 'match' && (
-                  <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 dark:border-emerald-800/40 dark:bg-emerald-950/30 dark:text-emerald-300">
-                    <CheckCircle size={15} className="shrink-0" />
-                    Visage correspondant à la pièce d'identité
-                  </div>
-                )}
-                {faceCompareResult === 'mismatch' && (
-                  <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800 dark:border-red-800/40 dark:bg-red-950/30 dark:text-red-300">
-                    <AlertTriangle size={15} className="shrink-0" />
-                    Le selfie ne correspond pas à la pièce d'identité. Reprenez le selfie.
-                  </div>
-                )}
-                {faceCompareResult === 'no_face_id' && (
-                  <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-300">
-                    <AlertTriangle size={15} className="shrink-0" />
-                    Aucun visage détecté sur la pièce. L'administrateur vérifiera manuellement.
-                  </div>
-                )}
 
                 <button type="button" onClick={retakeSelfie} className="btn btn-primary">
                   <RefreshCw size={14} /> Reprendre
@@ -1213,7 +1085,7 @@ export default function UserGenerateCsrPage() {
           >
             <CheckCircle size={15} />
             {submitting
-              ? (selfieFile ? 'Comparaison faciale…' : 'Envoi…')
+              ? 'Envoi…'
               : isCsrMode ? 'Soumettre le CSR' : 'Soumettre pour vérification'}
           </button>
         )}
