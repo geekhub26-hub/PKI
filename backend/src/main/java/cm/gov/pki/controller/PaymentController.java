@@ -111,6 +111,7 @@ public class PaymentController {
      * Endpoint webhook SharePay (public — pas de JWT).
      * Traite les événements payment.success, payment.failed, payment.cancelled.
      */
+    @Transactional
     @PostMapping(value = "/webhook/sharepay", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Void> handleSharePayWebhook(
             @RequestBody String rawBody,
@@ -220,6 +221,7 @@ public class PaymentController {
      * Vérifie le statut du paiement SharePay et confirme si SUCCESS.
      * Appelé par l'utilisateur depuis l'interface de suivi.
      */
+    @Transactional
     @PostMapping("/payment/verify/{requestId}")
     public ResponseEntity<?> verifyPayment(
             Authentication authentication,
@@ -262,6 +264,7 @@ public class PaymentController {
      * Confirmation manuelle du paiement par un administrateur.
      * Accessible via /admin/** donc protégé par le rôle admin dans SecurityConfig.
      */
+    @Transactional
     @PostMapping("/admin/payment/confirm/{requestId}")
     public ResponseEntity<?> adminConfirmPayment(
             Authentication authentication,
