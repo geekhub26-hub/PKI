@@ -145,23 +145,30 @@ export default function UserGenerateCsrPage() {
           nextResults[fileKey(file)] = { label: 'PDF', score: 1, ok: true };
           accepted.push(file); continue;
         }
+        // TM model : détection du type uniquement (CNI vs PASSEPORT), pas de rejet
+        let tmLabel = 'DOCUMENT';
+        let tmScore = 1;
         if (aiStatus === 'ready' && aiModel) {
           try {
             const result = await validateWithAi(file);
-            if (result.ok) {
-              nextResults[fileKey(file)] = result;
-              accepted.push(file);
-            } else {
-              invalid.push(`${file.name} — pièce non reconnue (CNI ou Passeport requis, confiance trop faible)`);
-            }
-          } catch {
-            // Modèle indisponible : on accepte sans filtrer
-            nextResults[fileKey(file)] = { label: 'DOCUMENT', score: 1, ok: true };
+            tmLabel = result.label;
+            tmScore = result.score;
+          } catch { /* ignore */ }
+        }
+
+        // Validation backend en temps réel — seul juge fiable
+        try {
+          const currentType = identityDocumentType || 'CNI';
+          const backendResult = await userService.preValidateDocument(file, currentType);
+          if (backendResult.accepted) {
+            nextResults[fileKey(file)] = { label: tmLabel, score: tmScore, ok: true };
             accepted.push(file);
+          } else {
+            invalid.push(`${file.name} — ${backendResult.message}`);
           }
-        } else {
-          // Modèle non chargé : on accepte sans filtrer
-          nextResults[fileKey(file)] = { label: 'DOCUMENT', score: 1, ok: true };
+        } catch (err: any) {
+          // Backend injoignable (réseau / cold start) : on accepte avec avertissement
+          nextResults[fileKey(file)] = { label: tmLabel, score: tmScore, ok: true };
           accepted.push(file);
         }
       }
@@ -188,7 +195,7 @@ export default function UserGenerateCsrPage() {
       if (Object.keys(newUrls).length) setFileUrls((prev) => ({ ...prev, ...newUrls }));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [aiModel, aiStatus]
+    [aiModel, aiStatus, identityDocumentType]
   );
 
   const onDrop = useCallback(

@@ -389,6 +389,15 @@ export const userService = {
     return response.data;
   },
 
+  preValidateDocument: async (file: File, type: string): Promise<{ accepted: boolean; message: string }> => {
+    const form = new FormData();
+    form.append('file', file);
+    const response = await apiClient.post<{ accepted: boolean; message: string }>(
+      `/user/validate-document?type=${encodeURIComponent(type)}`, form
+    );
+    return response.data;
+  },
+
   /**
    * Etape 3: soumission CSR apres validation admin
    */
