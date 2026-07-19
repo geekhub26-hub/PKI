@@ -193,6 +193,27 @@ public class UserController {
     }
 
     /**
+     * Pré-validation d'un document d'identité sans créer de demande.
+     * Retourne immédiatement accepted=true/false avec un message.
+     */
+    @PostMapping(value = "/validate-document", consumes = {"multipart/form-data"})
+    public ResponseEntity<?> preValidateDocument(
+            Authentication authentication,
+            @RequestPart("file") MultipartFile file,
+            @RequestParam(name = "type", required = false) String type
+    ) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof User)) {
+            return ResponseEntity.status(401).build();
+        }
+        try {
+            validateDocumentFile(file, type == null ? "" : type.trim().toUpperCase());
+            return ResponseEntity.ok(Map.of("accepted", true, "message", "Document valide"));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(400).body(Map.of("accepted", false, "message", ex.getMessage()));
+        }
+    }
+
+    /**
      * Etapes 1-2: soumission pour verification admin.
      */
     @PostMapping(value = "/certificate-requests", consumes = {"multipart/form-data"})
