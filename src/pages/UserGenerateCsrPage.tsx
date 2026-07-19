@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import * as tmImage from '@teachablemachine/image';
+import * as faceapi from 'face-api.js';
 import {
   Camera, RefreshCw, CheckCircle, User, Building2,
   CreditCard, FileText, KeyRound, Upload, AlertTriangle, ScanFace,
@@ -8,6 +9,40 @@ import {
 import { userService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { notify } from '../utils/notify';
+
+// ── Utilitaire hors composant (pas de state, stable) ─────────────────────────
+
+// Vérifie si l'image ressemble à un document (rejette selfies/nourriture).
+// Le modèle TM est binaire CNI/PASSPORT : tout est classé comme l'un d'eux.
+// Double heuristique pixel : > 45 % tons chair → selfie ; > 60 % très coloré → nourriture.
+const isLikelyDocument = (file: File): Promise<boolean> =>
+  new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const cv = document.createElement('canvas');
+      const size = 120;
+      cv.width = cv.height = size;
+      const ctx = cv.getContext('2d');
+      if (!ctx) { resolve(true); return; }
+      ctx.drawImage(img, 0, 0, size, size);
+      const { data } = ctx.getImageData(0, 0, size, size);
+      const total = size * size;
+      let skinPixels = 0, colorfulPixels = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        const isSkin = r > 90 && g > 50 && b > 20 && r > g && r > b
+          && (r - Math.min(g, b)) > 20 && Math.abs(g - b) < 80;
+        if (isSkin) skinPixels++;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        if (max > 0 && (max - min) / max > 0.55 && max > 100) colorfulPixels++;
+      }
+      resolve(skinPixels / total < 0.45 && colorfulPixels / total < 0.60);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(true); };
+    img.src = url;
+  });
 
 export default function UserGenerateCsrPage() {
   const [searchParams] = useSearchParams();
@@ -56,6 +91,11 @@ export default function UserGenerateCsrPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const csrFileRef = useRef<HTMLInputElement | null>(null);
 
+  // Face comparison state
+  const [faceModelsReady, setFaceModelsReady] = useState(false);
+  const selfieDescriptorRef = useRef<Float32Array | null>(null);
+  const [faceCompareResult, setFaceCompareResult] = useState<'match' | 'mismatch' | 'no_face_id' | 'comparing' | null>(null);
+
   // Auto-selfie state
   const [faceDetected, setFaceDetected] = useState(false);
   const [captureCountdown, setCaptureCountdown] = useState<number | null>(null);
@@ -96,6 +136,16 @@ export default function UserGenerateCsrPage() {
     return () => { cancelled = true; };
   }, []);
 
+  // Charger les modèles face-api.js (TinyFaceDetector + FaceRecognitionNet)
+  useEffect(() => {
+    const MODEL_URL = '/ai/face';
+    Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+      faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
+      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+    ]).then(() => setFaceModelsReady(true)).catch(() => {});
+  }, []);
+
   const fileKey = (f: File) => `${f.name}-${f.size}-${f.lastModified}`;
 
   const loadImage = (file: File) =>
@@ -106,6 +156,42 @@ export default function UserGenerateCsrPage() {
       img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image invalide')); };
       img.src = url;
     });
+
+  // Extrait le descripteur facial (requiert landmarks model)
+  const extractFaceDescriptor = async (
+    source: HTMLImageElement | HTMLCanvasElement
+  ): Promise<Float32Array | null> => {
+    if (!faceModelsReady) return null;
+    const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 });
+    const det = await faceapi
+      .detectSingleFace(source, opts)
+      .withFaceLandmarks(true)   // true = tiny model
+      .withFaceDescriptor();
+    return det?.descriptor ?? null;
+  };
+
+  // Lance la comparaison selfie ↔ pièces d'identité (appel différé car async)
+  const runFaceComparison = useCallback(async (
+    selfiDesc: Float32Array,
+    idFiles: File[]
+  ) => {
+    for (const f of idFiles) {
+      if (f.type === 'application/pdf') continue;
+      try {
+        const img = await loadImage(f);
+        const idDesc = await extractFaceDescriptor(img);
+        if (idDesc) {
+          const dist = faceapi.euclideanDistance(
+            Array.from(selfiDesc), Array.from(idDesc)
+          );
+          setFaceCompareResult(dist < 0.52 ? 'match' : 'mismatch');
+          return;
+        }
+      } catch { /* image non lisible, on continue */ }
+    }
+    setFaceCompareResult('no_face_id');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [faceModelsReady]);
 
   const validateWithAi = async (file: File) => {
     if (!aiModel) throw new Error('Modèle non disponible');
@@ -119,7 +205,8 @@ export default function UserGenerateCsrPage() {
     const score = best?.probability ?? 0;
     const normalized = label.toLowerCase();
     const isAllowed = ['cni', 'passport', 'passeport'].some((v) => normalized.includes(v));
-    const ok = isAllowed && score >= 0.8;
+    // Seuil relevé à 94 % (modèle binaire, 80 % insuffisant)
+    const ok = isAllowed && score >= 0.94;
     return { label, score, ok };
   };
 
@@ -142,14 +229,22 @@ export default function UserGenerateCsrPage() {
           nextResults[fileKey(file)] = { label: 'PDF', score: 1, ok: true };
           accepted.push(file); continue;
         }
+        // 1er filtre : heuristique pixel (selfie/nourriture → rejeté avant TM)
+        const docLike = await isLikelyDocument(file);
+        if (!docLike) {
+          nextResults[fileKey(file)] = { label: 'NON-DOCUMENT', score: 0, ok: false };
+          invalid.push(`${file.name} (photo de personne ou objet — joignez une photo de votre pièce d'identité)`);
+          continue;
+        }
         if (aiStatus !== 'ready' || !aiModel) {
           invalid.push(`${file.name} (modèle IA indisponible)`); continue;
         }
         try {
+          // 2e filtre : modèle Teachable Machine (seuil 94 %)
           const result = await validateWithAi(file);
           nextResults[fileKey(file)] = result;
           if (result.ok) accepted.push(file);
-          else invalid.push(file.name);
+          else invalid.push(`${file.name} (pièce non reconnue — CNI ou Passeport requis)`);
         } catch {
           nextResults[fileKey(file)] = { label: 'UNKNOWN', score: 0, ok: false };
           invalid.push(file.name);
@@ -159,16 +254,26 @@ export default function UserGenerateCsrPage() {
       if (reqId !== aiRequestIdRef.current) return;
       setAiResults((prev) => ({ ...prev, ...nextResults }));
       if (invalid.length) {
-        setError(`Seules les pièces CNI/Passeport sont acceptées. Fichiers non valides: ${invalid.join(', ')}`);
+        setError(invalid.join(' | '));
       }
-      setFiles((prev) => [...prev, ...accepted].slice(0, 5));
+      setFiles((prev) => {
+        const next = [...prev, ...accepted].slice(0, 5);
+        // Déclencher comparaison faciale si le selfie est déjà capturé
+        const desc = selfieDescriptorRef.current;
+        if (desc && accepted.some((f) => f.type !== 'application/pdf')) {
+          setFaceCompareResult('comparing');
+          runFaceComparison(desc, next);
+        }
+        return next;
+      });
       const newUrls: Record<string, string> = {};
       for (const f of accepted) {
         if (f.type !== 'application/pdf') newUrls[fileKey(f)] = URL.createObjectURL(f);
       }
       if (Object.keys(newUrls).length) setFileUrls((prev) => ({ ...prev, ...newUrls }));
     },
-    [aiModel, aiStatus]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [aiModel, aiStatus, runFaceComparison]
   );
 
   const onDrop = useCallback(
@@ -332,7 +437,21 @@ export default function UserGenerateCsrPage() {
         if (selfiePreviewUrl) URL.revokeObjectURL(selfiePreviewUrl);
         setSelfieFile(file);
         setSelfiePreviewUrl(url);
-        stopCamera(); // stopCamera calls stopDetection internally
+        stopCamera();
+        // Extraire le descripteur facial du selfie capturé
+        selfieDescriptorRef.current = null;
+        setFaceCompareResult(null);
+        extractFaceDescriptor(canvas).then((desc) => {
+          selfieDescriptorRef.current = desc;
+          // Comparer avec les pièces d'identité déjà uploadées
+          setFiles((prev) => {
+            if (desc && prev.some((f) => f.type !== 'application/pdf')) {
+              setFaceCompareResult('comparing');
+              runFaceComparison(desc, prev);
+            }
+            return prev;
+          });
+        });
       }, 'image/jpeg', 0.92);
     });
   };
@@ -340,6 +459,8 @@ export default function UserGenerateCsrPage() {
   const retakeSelfie = () => {
     if (selfiePreviewUrl) URL.revokeObjectURL(selfiePreviewUrl);
     setSelfiePreviewUrl(null); setSelfieFile(null);
+    selfieDescriptorRef.current = null;
+    setFaceCompareResult(null);
     startCamera();
   };
 
@@ -402,6 +523,8 @@ export default function UserGenerateCsrPage() {
     if (needsVerso && files.length < 2)
       return 'La CNI doit être soumise recto ET verso. Ajoutez la face arrière de la carte.';
     if (!selfieFile) return 'Veuillez ajouter un selfie pour la comparaison faciale.';
+    if (faceCompareResult === 'comparing') return 'Comparaison faciale en cours, veuillez patienter…';
+    if (faceCompareResult === 'mismatch') return 'Le selfie ne correspond pas à la pièce d\'identité fournie. Reprenez le selfie.';
     return null;
   };
 
@@ -874,6 +997,33 @@ export default function UserGenerateCsrPage() {
                     <CheckCircle size={12} /> Selfie capturé
                   </span>
                 </div>
+
+                {/* Résultat comparaison faciale */}
+                {faceCompareResult === 'comparing' && (
+                  <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800/40 dark:bg-blue-950/30 dark:text-blue-300">
+                    <RefreshCw size={15} className="animate-spin shrink-0" />
+                    Comparaison faciale en cours…
+                  </div>
+                )}
+                {faceCompareResult === 'match' && (
+                  <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 dark:border-emerald-800/40 dark:bg-emerald-950/30 dark:text-emerald-300">
+                    <CheckCircle size={15} className="shrink-0" />
+                    Visage correspondant à la pièce d'identité
+                  </div>
+                )}
+                {faceCompareResult === 'mismatch' && (
+                  <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800 dark:border-red-800/40 dark:bg-red-950/30 dark:text-red-300">
+                    <AlertTriangle size={15} className="shrink-0" />
+                    Le selfie ne correspond pas à la pièce d'identité. Reprenez le selfie.
+                  </div>
+                )}
+                {faceCompareResult === 'no_face_id' && (
+                  <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-300">
+                    <AlertTriangle size={15} className="shrink-0" />
+                    Aucun visage détecté sur la pièce. L'administrateur vérifiera manuellement.
+                  </div>
+                )}
+
                 <button type="button" onClick={retakeSelfie} className="btn btn-primary">
                   <RefreshCw size={14} /> Reprendre
                 </button>
