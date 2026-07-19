@@ -290,6 +290,15 @@ export default function UserGenerateCsrPage() {
       }
 
       if (reqId !== aiRequestIdRef.current) return;
+
+      // Auto-sync document type field from TM model result so backend receives the correct expectedType
+      const acceptedLabels = Object.values(nextResults).filter(r => r.ok).map(r => r.label.toLowerCase());
+      if (acceptedLabels.some(l => l.includes('passport') || l.includes('passeport'))) {
+        setIdentityDocumentType('PASSEPORT');
+      } else if (acceptedLabels.some(l => l.includes('cni'))) {
+        setIdentityDocumentType('CNI');
+      }
+
       setAiResults((prev) => ({ ...prev, ...nextResults }));
       if (invalid.length) {
         setError(invalid.join(' | '));
