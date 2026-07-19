@@ -22,9 +22,9 @@ spring:
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 5
-      minimum-idle: 1
+      minimum-idle: 0
       connection-timeout: 30000
-      initialization-fail-timeout: 60000
+      initialization-fail-timeout: -1
 
   # JPA / Hibernate
   jpa:
