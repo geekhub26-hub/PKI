@@ -9,76 +9,6 @@ import { userService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { notify } from '../utils/notify';
 
-// ── Utilitaire hors composant (pas de state, stable) ─────────────────────────
-
-// Vérifie si l'image ressemble à un document d'identité (CNI / Passeport).
-// Le modèle TM est binaire CNI/PASSPORT : TOUTE image est classée comme l'une d'elles.
-// Cinq heuristiques pixel appliquées avant le modèle TM :
-//   1. Tons chair dominants (> 38 %)       → selfie / gros plan visage
-//   2. Pixels très saturés (> 55 %)        → nourriture / objet coloré / flyer vif
-//   3. Runs identiques horizontaux (> 23 %) → capture d'écran / image numérique synthétique
-//   4. Blanc quasi-pur dominant (> 70 %)   → feuille de papier photographiée (PV, relevé, facture…)
-//      Les vraies CNI ont un fond beige/vert + photo : rarement > 50 % de blanc pur.
-//   5. Format portrait + peau (ratio < 0.85 et peau > 14 %) → photo plein corps d'une personne
-//      Une CNI est en paysage ; un passeport a très peu de zone-peau (< 12 %).
-const isLikelyDocument = (file: File): Promise<boolean> =>
-  new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const cv = document.createElement('canvas');
-      const size = 200;
-      cv.width = cv.height = size;
-      const ctx = cv.getContext('2d');
-      if (!ctx) { resolve(true); return; }
-
-      const aspectRatio = img.naturalWidth / img.naturalHeight;
-
-      ctx.drawImage(img, 0, 0, size, size);
-      const { data } = ctx.getImageData(0, 0, size, size);
-      const total = size * size;
-      let skinPixels = 0, colorfulPixels = 0, identicalHPairs = 0, nearWhitePixels = 0;
-
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i], g = data[i + 1], b = data[i + 2];
-
-        // Check 1 — tons chair
-        const isSkin = r > 90 && g > 50 && b > 20 && r > g && r > b
-          && (r - Math.min(g, b)) > 20 && Math.abs(g - b) < 80;
-        if (isSkin) skinPixels++;
-
-        // Check 2 — très saturé (flyer coloré, nourriture…)
-        const max = Math.max(r, g, b), min = Math.min(r, g, b);
-        if (max > 0 && (max - min) / max > 0.55 && max > 100) colorfulPixels++;
-
-        // Check 3 — blanc quasi-pur (papier imprimé photographié)
-        if (r > 210 && g > 210 && b > 210) nearWhitePixels++;
-
-        // Check 4 — paire horizontale strictement identique (no bruit capteur → image numérique)
-        const col = (i / 4) % size;
-        if (col < size - 1) {
-          const j = i + 4;
-          if (data[i] === data[j] && data[i + 1] === data[j + 1] && data[i + 2] === data[j + 2])
-            identicalHPairs++;
-        }
-      }
-
-      const skinRatio      = skinPixels / total;
-      const colorRatio     = colorfulPixels / total;
-      const identicalRatio = identicalHPairs / (size * (size - 1));
-      const nearWhiteRatio = nearWhitePixels / total;
-
-      if (skinRatio >= 0.38)                              { resolve(false); return; } // selfie / gros plan
-      if (colorRatio >= 0.55)                             { resolve(false); return; } // objet coloré / flyer
-      if (identicalRatio >= 0.23)                         { resolve(false); return; } // screenshot / image digitale
-      if (nearWhiteRatio >= 0.78)                         { resolve(false); return; } // feuille de papier (PV, facture…)
-      if (aspectRatio < 0.85 && skinRatio >= 0.14)        { resolve(false); return; } // portrait plein corps d'une personne
-      resolve(true);
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); resolve(true); };
-    img.src = url;
-  });
 
 export default function UserGenerateCsrPage() {
   const [searchParams] = useSearchParams();
@@ -216,14 +146,7 @@ export default function UserGenerateCsrPage() {
           nextResults[fileKey(file)] = { label: 'PDF', score: 1, ok: true };
           accepted.push(file); continue;
         }
-        // 1er filtre : heuristique pixel (selfie/nourriture → rejeté avant TM)
-        const docLike = await isLikelyDocument(file);
-        if (!docLike) {
-          nextResults[fileKey(file)] = { label: 'NON-DOCUMENT', score: 0, ok: false };
-          invalid.push(`${file.name} (photo de personne ou objet — joignez une photo de votre pièce d'identité)`);
-          continue;
-        }
-        // TM model : détection du type uniquement, pas de rejet (pixel heuristic suffit)
+        // TM model : détection du type uniquement (CNI / PASSEPORT), le backend valide le contenu
         if (aiStatus === 'ready' && aiModel) {
           try {
             const result = await validateWithAi(file);
