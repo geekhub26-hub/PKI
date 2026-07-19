@@ -12,9 +12,14 @@ import { notify } from '../utils/notify';
 
 // ── Utilitaire hors composant (pas de state, stable) ─────────────────────────
 
-// Vérifie si l'image ressemble à un document (rejette selfies/nourriture).
-// Le modèle TM est binaire CNI/PASSPORT : tout est classé comme l'un d'eux.
-// Double heuristique pixel : > 45 % tons chair → selfie ; > 60 % très coloré → nourriture.
+// Vérifie si l'image ressemble à un document d'identité (CNI / Passeport).
+// Le modèle TM est binaire CNI/PASSPORT : TOUTE image est classée comme l'une d'elles.
+// Trois heuristiques pixel appliquées avant le modèle TM :
+//   1. Tons chair dominants (> 45 %)  → selfie / photo de personne → rejeté
+//   2. Pixels très saturés (> 60 %)   → nourriture / objet coloré  → rejeté
+//   3. Runs identiques horizontaux (> 28 %) → capture d'écran / image générée → rejeté
+//      Les vraies photos ont du bruit capteur → peu de pixels adjacents strictement identiques.
+//      Les captures d'écran ont de larges plages de couleur uniforme → beaucoup de runs.
 const isLikelyDocument = (file: File): Promise<boolean> =>
   new Promise((resolve) => {
     const url = URL.createObjectURL(file);
@@ -22,23 +27,45 @@ const isLikelyDocument = (file: File): Promise<boolean> =>
     img.onload = () => {
       URL.revokeObjectURL(url);
       const cv = document.createElement('canvas');
-      const size = 120;
+      const size = 200; // résolution plus haute pour mieux détecter les screenshots
       cv.width = cv.height = size;
       const ctx = cv.getContext('2d');
       if (!ctx) { resolve(true); return; }
       ctx.drawImage(img, 0, 0, size, size);
       const { data } = ctx.getImageData(0, 0, size, size);
       const total = size * size;
-      let skinPixels = 0, colorfulPixels = 0;
+      let skinPixels = 0, colorfulPixels = 0, identicalHPairs = 0;
       for (let i = 0; i < data.length; i += 4) {
         const r = data[i], g = data[i + 1], b = data[i + 2];
+
+        // Check 1 — tons chair
         const isSkin = r > 90 && g > 50 && b > 20 && r > g && r > b
           && (r - Math.min(g, b)) > 20 && Math.abs(g - b) < 80;
         if (isSkin) skinPixels++;
+
+        // Check 2 — très saturé
         const max = Math.max(r, g, b), min = Math.min(r, g, b);
         if (max > 0 && (max - min) / max > 0.55 && max > 100) colorfulPixels++;
+
+        // Check 3 — paire horizontale strictement identique (noise absent → screenshot)
+        // On ne teste pas les derniers pixels de chaque ligne
+        const col = (i / 4) % size;
+        if (col < size - 1) {
+          const j = i + 4;
+          if (data[i] === data[j] && data[i + 1] === data[j + 1] && data[i + 2] === data[j + 2]) {
+            identicalHPairs++;
+          }
+        }
       }
-      resolve(skinPixels / total < 0.45 && colorfulPixels / total < 0.60);
+
+      const skinRatio      = skinPixels / total;
+      const colorRatio     = colorfulPixels / total;
+      const identicalRatio = identicalHPairs / (size * (size - 1));
+
+      if (skinRatio >= 0.45)      { resolve(false); return; } // selfie / personne
+      if (colorRatio >= 0.60)     { resolve(false); return; } // nourriture / objet
+      if (identicalRatio >= 0.28) { resolve(false); return; } // capture d'écran / image synthétique
+      resolve(true);
     };
     img.onerror = () => { URL.revokeObjectURL(url); resolve(true); };
     img.src = url;
@@ -206,7 +233,7 @@ export default function UserGenerateCsrPage() {
     const normalized = label.toLowerCase();
     const isAllowed = ['cni', 'passport', 'passeport'].some((v) => normalized.includes(v));
     // Seuil relevé à 94 % (modèle binaire, 80 % insuffisant)
-    const ok = isAllowed && score >= 0.94;
+    const ok = isAllowed && score >= 0.97;
     return { label, score, ok };
   };
 
