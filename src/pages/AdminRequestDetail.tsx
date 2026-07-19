@@ -179,7 +179,8 @@ export default function AdminRequestDetail() {
 
   const isPendingReview  = request.status === 'PENDING_REVIEW' || request.status === 'PENDING';
   const isCsrStage       = request.status === 'CSR_SUBMITTED' || request.status === 'REVIEW_APPROVED';
-  const isAwaitingPayment = request.status === 'AWAITING_PAYMENT';
+  const isAwaitingPayment = request.status === 'AWAITING_PAYMENT'
+    || (request.status === 'REVIEW_APPROVED' && !!request.sharePayReference);
   const hasActions       = isPendingReview || isCsrStage || isAwaitingPayment || request.status === 'ISSUED';
 
   return (
