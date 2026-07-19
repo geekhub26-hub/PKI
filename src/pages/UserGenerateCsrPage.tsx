@@ -73,7 +73,7 @@ const isLikelyDocument = (file: File): Promise<boolean> =>
       if (skinRatio >= 0.38)                              { resolve(false); return; } // selfie / gros plan
       if (colorRatio >= 0.55)                             { resolve(false); return; } // objet coloré / flyer
       if (identicalRatio >= 0.23)                         { resolve(false); return; } // screenshot / image digitale
-      if (nearWhiteRatio >= 0.70)                         { resolve(false); return; } // feuille de papier (PV, facture…)
+      if (nearWhiteRatio >= 0.78)                         { resolve(false); return; } // feuille de papier (PV, facture…)
       if (aspectRatio < 0.85 && skinRatio >= 0.14)        { resolve(false); return; } // portrait plein corps d'une personne
       resolve(true);
     };
@@ -242,9 +242,9 @@ export default function UserGenerateCsrPage() {
     const score = best?.probability ?? 0;
     const normalized = label.toLowerCase();
     const isAllowed = ['cni', 'passport', 'passeport'].some((v) => normalized.includes(v));
-    // Seuil à 93 % — les 5 heuristiques pixel font le gros du travail ;
-    // le verso CNI (QR code + MRZ) score souvent 85-95 % sur un modèle entraîné recto.
-    const ok = isAllowed && score >= 0.93;
+    // Seuil à 90 % — les 5 heuristiques pixel font le gros du travail ;
+    // le verso CNI (QR code + MRZ, pas de visage) score 85-92 % sur un modèle entraîné recto.
+    const ok = isAllowed && score >= 0.90;
     return { label, score, ok };
   };
 
