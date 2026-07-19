@@ -515,6 +515,7 @@ public class AdminController {
 		return ResponseEntity.ok(java.util.Map.of("status", req.getStatus(), "reason", req.getRejectionReason()));
 	}
 
+	@Transactional
 	@PostMapping("/certificate-requests/{id}/approve")
 	public ResponseEntity<?> approveRequest(Authentication authentication, @PathVariable("id") java.util.UUID id,
 										@RequestParam(value = "validityDays", defaultValue = "365") int validityDays) {
@@ -578,6 +579,7 @@ public class AdminController {
 		return ResponseEntity.ok(java.util.Map.of("certificate", certPem, "message", "Email de validation envoyé"));
 	}
 
+	@Transactional
 	@PostMapping("/certificate-requests/{id}/reject")
 	public ResponseEntity<?> rejectRequest(Authentication authentication, @PathVariable("id") java.util.UUID id,
 							@RequestParam(value = "reason", required = false) String reason) {
